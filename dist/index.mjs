@@ -25,6 +25,7 @@ class SidechatAPIClient {
    * Default headers for every API request
    * @type {Object}
    * @static
+   * @constant
    */
   defaultHeaders = {
     Accept: "application/json",
@@ -246,9 +247,21 @@ class SidechatAPIClient {
    * Get updated status for user and group
    * @method
    * @since 1.0.0
-   * @param {String} [groupID] - ID of a specific group to retrieve info from
+   * @deprecated since 2.1.0, will be removed by 3.0.0.  Please use `getUpdates` instead!
+   * @param {String} [groupID] - ID of a specific group to retrieve info from.  Falls back to user's primary group.
    */
   getUserAndGroup = async (groupID = "") => {
+    const json = await this.getUpdates(groupID);
+    return json;
+  };
+
+  /**
+   * Get updated status for user and group
+   * @method
+   * @since 2.1.0
+   * @param {String} [groupID] - ID of a specific group to retrieve info from.  Falls back to user's primary group.
+   */
+  getUpdates = async (groupID = "") => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
     }
@@ -458,6 +471,59 @@ class SidechatAPIClient {
       });
       const json = await res.json();
       return await json.items;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to get asset library.`);
+    }
+  };
+
+  /**
+   * Gets the current authenticated user and a list of the groups of which they are members.
+   * @method
+   * @since 2.1.0
+   * @returns {SidechatCurrentUser}
+   */
+  getCurrentUser = async () => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`https://api.sidechat.lol/v1/users/me`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+      });
+      const json = await res.json();
+      return await json;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to get asset library.`);
+    }
+  };
+
+  /**
+   * Gets the metadata of a group from its ID
+   * @method
+   * @since 2.1.0
+   * @param {String} [groupID] - alphanumeric ID of a group to get.  Falls back to user's primary group.
+   * @returns {SidechatGroup}
+   */
+  getGroupMetadata = async (groupID = "") => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`https://api.sidechat.lol/v1/groups/${groupID}`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+      });
+      const json = await res.json();
+      return await json.group;
     } catch (err) {
       console.error(err);
       throw new SidechatAPIError(`Failed to get asset library.`);
