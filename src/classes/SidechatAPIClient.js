@@ -374,6 +374,41 @@ class SidechatAPIClient {
   };
 
   /**
+   * Fetches the posts or comments that the user has created
+   * @method
+   * @since 2.3.5
+   * @param {"posts"|"comments"} contentType - type of user content to fetch
+   * @returns {SidechatPostOrComment[]} post object
+   */
+  getUserContent = async (contentType) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    if (contentType == "posts") {
+      contentType = "my_posts";
+    } else if (contentType == "comments") {
+      contentType = "my_comments";
+    }
+    try {
+      const res = await fetch(
+        `https://api.sidechat.lol/v1/posts&type=${contentType}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
+        }
+      );
+      const json = await res.json();
+      return json.posts;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to get content from user.`);
+    }
+  };
+
+  /**
    * Get all the commments on a post
    * @method
    * @since 2.0.0-alpha.0
@@ -613,6 +648,7 @@ class SidechatAPIClient {
    * @param {SidechatSimpleAsset[]} [assetList] - list of assets to attach.
    * @param {Boolean} [disableDMs] - prevent direct messages from being sent to post's author
    * @param {Boolean} [disableComments] - whether or not comments should be disabled on post
+   * @param {Boolean} [anonymous] - whether or not to hide user's name and icon on post
    * @returns {SidechatPostOrComment} the created post
    */
   createPost = async (
@@ -620,7 +656,8 @@ class SidechatAPIClient {
     groupID,
     assetList = [],
     disableDMs = false,
-    disableComments = false
+    disableComments = false,
+    anonymous = false
   ) => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
@@ -640,6 +677,7 @@ class SidechatAPIClient {
           attachments: [],
           dms_disabled: disableDMs,
           comments_disabled: disableComments,
+          using_identity: !anonymous,
         }),
       });
       const json = await res.json();
@@ -683,7 +721,7 @@ class SidechatAPIClient {
    * Sets the conversation icon of the current user
    * @method
    * @since 2.2.1
-   * @param {String} userID - alphanumeric ID of the post to delete
+   * @param {String} userID - alphanumeric ID of user
    * @param {String} emoji - emoji to set as icon
    * @param {String} primaryColor - hex string (including #) of primary color
    * @param {String} secondaryColor - hex string (including #) of secondary color
@@ -697,6 +735,7 @@ class SidechatAPIClient {
         method: "PATCH",
         headers: {
           ...this.defaultHeaders,
+          "App-Version": "0",
           Authorization: `Bearer ${this.userToken}`,
         },
         body: JSON.stringify({
@@ -710,6 +749,69 @@ class SidechatAPIClient {
       });
       const json = await res.json();
       return await json;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to set icon.`);
+    }
+  };
+
+  /**
+   * Checks if user can set their username to a string
+   * @method
+   * @since 2.3.6
+   * @param {String} username - string to check
+   * @returns {Boolean} whether or not username is valid and unused
+   */
+  checkUsername = async (username) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(
+        `https://api.sidechat.lol/v1/users/username?username=${username}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
+        }
+      );
+      if (res?.status == 200 || res?.status == 204) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to check username.`);
+    }
+  };
+
+  /**
+   * Changes the username of the current user
+   * @method
+   * @since 2.3.6
+   * @param {String} userID - alphanumeric ID of user
+   * @param {String} username - new username to set
+   */
+  setUsername = async (userID, username) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`https://api.sidechat.lol/v1/users/${userID}`, {
+        method: "PATCH",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+        body: JSON.stringify({
+          username: username,
+        }),
+      });
+      const json = await res.json();
+      return await json.user;
     } catch (err) {
       console.error(err);
       throw new SidechatAPIError(`Failed to set icon.`);
@@ -742,6 +844,71 @@ class SidechatAPIClient {
     } catch (err) {
       console.error(err);
       throw new SidechatAPIError(`Failed to mark activity as read.`);
+    }
+  };
+
+  /**
+   * Retrieves joinable group chats
+   * @method
+   * @since 2.3.5
+   */
+  getGroupChats = async () => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`https://api.sidechat.lol/v1/chats/explore`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+      });
+      const json = await res.json();
+      return await json.chats;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to get groupchats.`);
+    }
+  };
+
+  /**
+   * Joins a group chat
+   * @method
+   * @since 2.3.5
+   */
+  joinGroupChat = async (
+    groupChatID,
+    displayName,
+    emoji,
+    primaryColor,
+    secondaryColor
+  ) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`https://api.sidechat.lol/v1/chats/groups/join`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+        body: JSON.stringify({
+          chat_id: groupChatID,
+          identity: {
+            display_name: displayName,
+            emoji: emoji,
+            secondary_color: secondaryColor,
+            color: primaryColor,
+          },
+        }),
+      });
+      const json = await res.json();
+      return await json;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to join groupchat.`);
     }
   };
 }
