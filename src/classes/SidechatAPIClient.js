@@ -544,6 +544,33 @@ class SidechatAPIClient {
   };
 
   /**
+   * Searches for new groups based on a query keyword
+   * @method
+   * @since 2.6.0
+   * @param {String} query - the string to search for.  This will be encoded, so strings with spaces and special characters are okay.
+   * @returns {SidechatGroup[]}
+   */
+  searchAvailableGroups = async (query) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`${this.apiRoot}/v1/groups/explore/search?term=${encodeURIComponent(query)}`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        },
+      });
+      const json = await res.json();
+      return await json.results;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to search groups.`);
+    }
+  };
+
+  /**
    * Retrieves the entire accessible asset library.  Be warned that as of the time of this documentation, it's a 1.5MB JSON download and this request is very expensive.
    * @method
    * @since 2.0.6
@@ -1029,6 +1056,60 @@ class SidechatAPIClient {
   };
 
   /**
+   * Fetches a public user profile
+   * @method
+   * @since 2.6.0
+   * @param {String} username - username of the user to fetch
+   * @returns {SidechatProfile}
+   */
+  getUserProfile = async (username) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`${this.apiRoot}/v1/groups/username?username=${username}`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        }
+      });
+      const json = await res.json();
+      return await json.group;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to set icon.`);
+    }
+  };
+
+  /**
+   * Fetches a public user's posts
+   * @method
+   * @since 2.6.0
+   * @param {String} username - username of the user to fetch
+   * @returns {SidechatPostOrComment[]}
+   */
+  getUserPosts = async (username) => {
+    if (!this.userToken) {
+      throw new SidechatAPIError("User is not authenticated.");
+    }
+    try {
+      const res = await fetch(`${this.apiRoot}/v1/users/posts?username=${username}`, {
+        method: "GET",
+        headers: {
+          ...this.defaultHeaders,
+          Authorization: `Bearer ${this.userToken}`,
+        }
+      });
+      const json = await res.json();
+      return await json.posts;
+    } catch (err) {
+      console.error(err);
+      throw new SidechatAPIError(`Failed to set icon.`);
+    }
+  };
+
+  /**
    * Marks an activity item as read
    * @method
    * @since 2.3.2
@@ -1083,8 +1164,13 @@ class SidechatAPIClient {
   };
 
   /**
-   * Joins a group chat
+   * Joins a group chat.  To mimic the official client, use the user's display name and icon by default.
    * @method
+   * @param {String} groupChatID - alphanumeric ID of group chat to join
+   * @param {String} displayName - display name to use in chat
+   * @param {String} emoji - emoji to use as icon
+   * @param {String} primaryColor - hex string of primary color
+   * @param {String} secondaryColor - hex string of secondary color
    * @since 2.3.5
    */
   joinGroupChat = async (
