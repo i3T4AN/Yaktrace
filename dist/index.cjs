@@ -299,7 +299,7 @@ class SidechatAPIClient {
     method = "GET",
     body = undefined,
     headers = {},
-    stripHeaders = false
+    stripHeaders = false,
   ) => {
     let requestHeaders = this.defaultHeaders;
     if (stripHeaders) {
@@ -522,7 +522,7 @@ class SidechatAPIClient {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       const json = await res.json();
       return json;
@@ -547,15 +547,16 @@ class SidechatAPIClient {
     }
     try {
       const res = await fetch(
-        `${this.apiRoot}/v1/posts?${cursor ? "cursor=" + encodeURIComponent(cursor) + "&" : ""
-        }group_id=${groupID}&type=${category}`,
+        `${this.apiRoot}/v1/posts?${
+          cursor ? "cursor=" + encodeURIComponent(cursor) + "&" : ""
+        }group_id=${groupID}&type=${category}&cacheBust=${Date.now()}`,
         {
           method: "GET",
           headers: {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       const json = await res.json();
       return json;
@@ -610,14 +611,14 @@ class SidechatAPIClient {
     }
     try {
       const res = await fetch(
-        `${this.apiRoot}/v1/posts/get?include_deleted=${includeDeleted}&post_id=${postID}`,
+        `${this.apiRoot}/v1/posts/get?include_deleted=${includeDeleted}&post_id=${postID}&cacheBust=${Date.now()}`,
         {
           method: "GET",
           headers: {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       const json = await res.json();
       return json.post;
@@ -672,14 +673,14 @@ class SidechatAPIClient {
     }
     try {
       const res = await fetch(
-        `${this.apiRoot}/v1/posts/comments/?post_id=${postID}`,
+        `${this.apiRoot}/v1/posts/comments/?post_id=${postID}&cacheBust=${Date.now()}`,
         {
           method: "GET",
           headers: {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       const json = await res.json();
       // Function to preprocess the comments and organize them into a nested structure
@@ -775,13 +776,16 @@ class SidechatAPIClient {
       throw new SidechatAPIError("User is not authenticated.");
     }
     try {
-      const res = await fetch(`${this.apiRoot}/v1/groups/explore/search?term=${encodeURIComponent(query)}`, {
-        method: "GET",
-        headers: {
-          ...this.defaultHeaders,
-          Authorization: `Bearer ${this.userToken}`,
+      const res = await fetch(
+        `${this.apiRoot}/v1/groups/explore/search?term=${encodeURIComponent(query)}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
         },
-      });
+      );
       const json = await res.json();
       return await json.results;
     } catch (err) {
@@ -892,7 +896,7 @@ class SidechatAPIClient {
           body: JSON.stringify({
             group_id: groupID,
           }),
-        }
+        },
       );
       const json = await res.json();
       return await json;
@@ -924,7 +928,7 @@ class SidechatAPIClient {
     topLevelReplyID,
     assetList = [],
     disableDMs = false,
-    anonymous = false
+    anonymous = false,
   ) => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
@@ -977,7 +981,7 @@ class SidechatAPIClient {
     disableComments = false,
     anonymous = false,
     repostId = undefined,
-    pollOptions = undefined
+    pollOptions = undefined,
   ) => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
@@ -993,13 +997,13 @@ class SidechatAPIClient {
         dms_disabled: disableDMs,
         comments_disabled: disableComments,
         using_identity: !anonymous,
-        quote_post_id: repostId
+        quote_post_id: repostId,
       };
       // If pollOptions is provided and is a non-empty array, add poll_request
       if (Array.isArray(pollOptions) && pollOptions.length > 0) {
         body.poll_request = {
           allows_view_results: true,
-          choices: pollOptions
+          choices: pollOptions,
         };
       }
       const res = await fetch(`${this.apiRoot}/v1/posts`, {
@@ -1089,16 +1093,19 @@ class SidechatAPIClient {
       throw new SidechatAPIError("User is not authenticated.");
     }
     try {
-      const res = await fetch(`${this.apiRoot}/v1/polls/view_results`, {
-        method: "POST",
-        headers: {
-          ...this.defaultHeaders,
-          Authorization: `Bearer ${this.userToken}`,
+      const res = await fetch(
+        `${this.apiRoot}/v1/polls/view_results&cacheBust=${Date.now()}`,
+        {
+          method: "POST",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
+          body: JSON.stringify({
+            poll_id: pollId,
+          }),
         },
-        body: JSON.stringify({
-          poll_id: pollId,
-        }),
-      });
+      );
       const json = await res.json();
       return await json;
     } catch (err) {
@@ -1133,7 +1140,9 @@ class SidechatAPIClient {
       uri: uri,
     });
 
-    const urlReq = await this.sendRequest(`/v1/assets/upload_url?content_type=${imageType}`);
+    const urlReq = await this.sendRequest(
+      `/v1/assets/upload_url?content_type=${imageType}`,
+    );
     const urlJson = await urlReq.json();
 
     try {
@@ -1148,7 +1157,7 @@ class SidechatAPIClient {
         return `${this.apiRoot}/v1/assets/library/${urlJson.asset_id}`;
       } else {
         throw new SidechatAPIError(
-          `Couldn't upload image - error ${uploadReq.status}`
+          `Couldn't upload image - error ${uploadReq.status}`,
         );
       }
     } catch (e) {
@@ -1214,7 +1223,7 @@ class SidechatAPIClient {
           Authorization: `Bearer ${this.userToken}`,
         },
         body: JSON.stringify({
-          bio: bio
+          bio: bio,
         }),
       });
       const json = await res.json();
@@ -1245,7 +1254,7 @@ class SidechatAPIClient {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       if (res?.status == 200 || res?.status == 204) {
         return true;
@@ -1300,13 +1309,16 @@ class SidechatAPIClient {
       throw new SidechatAPIError("User is not authenticated.");
     }
     try {
-      const res = await fetch(`${this.apiRoot}/v1/groups/username?username=${username}`, {
-        method: "GET",
-        headers: {
-          ...this.defaultHeaders,
-          Authorization: `Bearer ${this.userToken}`,
-        }
-      });
+      const res = await fetch(
+        `${this.apiRoot}/v1/groups/username?username=${username}&cacheBust=${Date.now()}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
+        },
+      );
       const json = await res.json();
       return await json.group;
     } catch (err) {
@@ -1327,13 +1339,16 @@ class SidechatAPIClient {
       throw new SidechatAPIError("User is not authenticated.");
     }
     try {
-      const res = await fetch(`${this.apiRoot}/v1/users/posts?username=${username}`, {
-        method: "GET",
-        headers: {
-          ...this.defaultHeaders,
-          Authorization: `Bearer ${this.userToken}`,
-        }
-      });
+      const res = await fetch(
+        `${this.apiRoot}/v1/users/posts?username=${username}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
+        },
+      );
       const json = await res.json();
       return await json.posts;
     } catch (err) {
@@ -1381,13 +1396,16 @@ class SidechatAPIClient {
       throw new SidechatAPIError("User is not authenticated.");
     }
     try {
-      const res = await fetch(`${this.apiRoot}/v1/chats/explore`, {
-        method: "GET",
-        headers: {
-          ...this.defaultHeaders,
-          Authorization: `Bearer ${this.userToken}`,
+      const res = await fetch(
+        `${this.apiRoot}/v1/chats/explore&cacheBust=${Date.now()}`,
+        {
+          method: "GET",
+          headers: {
+            ...this.defaultHeaders,
+            Authorization: `Bearer ${this.userToken}`,
+          },
         },
-      });
+      );
       const json = await res.json();
       return await json.chats;
     } catch (err) {
@@ -1411,7 +1429,7 @@ class SidechatAPIClient {
     displayName,
     emoji,
     primaryColor,
-    secondaryColor
+    secondaryColor,
   ) => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
@@ -1492,7 +1510,7 @@ class SidechatAPIClient {
             ...this.defaultHeaders,
             Authorization: `Bearer ${this.userToken}`,
           },
-        }
+        },
       );
       const json = await res.json();
       return await json.chat;
@@ -1554,7 +1572,7 @@ class SidechatAPIClient {
     clientID,
     postID,
     anonymous = false,
-    postContext = "feed"
+    postContext = "feed",
   ) => {
     if (!this.userToken) {
       throw new SidechatAPIError("User is not authenticated.");
@@ -1602,7 +1620,7 @@ class SidechatAPIClient {
         body: JSON.stringify({
           post_id: postID,
           post_context: "feed",
-          report: false
+          report: false,
         }),
       });
       const json = await res.json();
