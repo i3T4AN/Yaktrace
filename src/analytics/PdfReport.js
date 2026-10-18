@@ -128,7 +128,8 @@ function pageContent(entries) {
       commands.push(
         `1 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
         `1 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
-        `1 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
+        `1 0 0 rg BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
+        "1 g",
       );
     } else if (entry?.type === "postText") {
       commands.push(`BT /F1 14 Tf 40 ${y} Td (${escapePdfText(entry.text)}) Tj ET`);
