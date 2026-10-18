@@ -35,22 +35,53 @@ try {
     const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
     if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
-    database.clearCaptures(selectedGroupId);
-    console.log(`Authenticating complete. First capture for school ${selectedGroupId}; locking the UTC three-month window…`);
-    const baseline = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
-    const latestPost = database.getMostRecentPost(baseline.snapshotId);
-    if (!latestPost) throw new Error("The first capture contains no posts to block.");
+    let current = database.getLatestSnapshot(selectedGroupId);
+    if (!current) {
+      console.log(`Authenticating complete. First capture for school ${selectedGroupId}; locking the UTC three-month window…`);
+      const initial = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
+      current = database.getSnapshot(initial.snapshotId);
+    } else if (current.status !== "complete") {
+      console.log("Resuming the interrupted capture before continuing blocks…");
+      const resumed = await collector.capture(selectedGroupId, new Date(), {
+        forceNew: true,
+        runType: current.run_type,
+        parentSnapshotId: current.parent_snapshot_id,
+        blockedPostId: current.blocked_post_id,
+        window: { windowStart: current.window_start, windowEnd: current.window_end },
+      });
+      current = database.getSnapshot(resumed.snapshotId);
+    }
 
-    console.log(`First capture complete. Blocking newest post source ${latestPost.id}…`);
-    throwIfSourceError(await api.hidePostsFromUser(latestPost.id), "block the newest post's source");
-    console.log("Block complete. Starting the second capture over the same locked window…");
-    const derived = await collector.capture(selectedGroupId, new Date(), {
-      forceNew: true,
-      runType: "blocked_author",
-      parentSnapshotId: baseline.snapshotId,
-      window: { windowStart: baseline.windowStart, windowEnd: baseline.windowEnd },
-    });
-    console.log(`Second capture complete. First: ${baseline.postsStored} posts; second: ${derived.postsStored} posts.`);
+    if (current.blocked_post_id && database.snapshotHasPost(current.id, current.blocked_post_id)) {
+      throw new Error("The prior blocked post is still present in the latest capture; stopping to avoid blocking it again.");
+    }
+
+    let blocksCompleted = 0;
+    while (database.countSnapshotPosts(current.id) > 0) {
+      const nextBlockablePost = database.getNextBlockablePost(current.id);
+      if (!nextBlockablePost) {
+        console.log(`Complete. No blockable posts remain after ${blocksCompleted} blocks.`);
+        break;
+      }
+      console.log(`Blocking next available post source ${nextBlockablePost.id}, then capturing the same locked window again…`);
+      throwIfSourceError(await api.hidePostsFromUser(nextBlockablePost.id), "block the next post's source");
+      const next = await collector.capture(selectedGroupId, new Date(), {
+        forceNew: true,
+        runType: "blocked_author",
+        parentSnapshotId: current.id,
+        blockedPostId: nextBlockablePost.id,
+        window: { windowStart: current.window_start, windowEnd: current.window_end },
+      });
+      current = database.getSnapshot(next.snapshotId);
+      if (database.snapshotHasPost(current.id, nextBlockablePost.id)) {
+        throw new Error("The blocked post is still present after its follow-up capture; stopping to avoid repeating the same block.");
+      }
+      blocksCompleted += 1;
+      console.log(`Saved follow-up capture ${blocksCompleted}: ${database.countSnapshotPosts(current.id)} posts remain.`);
+    }
+    if (database.countSnapshotPosts(current.id) === 0) {
+      console.log(`Complete. The locked window is exhausted after ${blocksCompleted} blocks.`);
+    }
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -118,10 +149,10 @@ Usage:
   npm run analytics -- capture [--group GROUP_ID] [--relogin] [--database path/to/data.sqlite]
 
 capture authenticates if needed, defaults to the account's primary school membership,
-clears earlier captures for that school, locks a three-calendar-month UTC window,
-collects the first capture, blocks the newest captured post's source, then collects
-a second capture over the exact same locked window. Both captures and their raw
-responses are stored in SQLite.
+locks a three-calendar-month UTC window, saves the first capture, then repeatedly
+blocks the next available non-self post source and saves another capture over that
+exact same window until no blockable posts remain. Every capture and its raw
+responses are stored in SQLite. Interrupted captures resume from their saved cursor.
 `);
 }
 

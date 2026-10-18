@@ -43,15 +43,15 @@ export class AnalyticsDatabase {
       .run(group.id, typeof group.name === "string" ? group.name : null, JSON.stringify(group), now());
   }
 
-  createSnapshot(groupId, windowStart, windowEnd, { runType = "baseline", parentSnapshotId = null } = {}) {
+  createSnapshot(groupId, windowStart, windowEnd, { runType = "baseline", parentSnapshotId = null, blockedPostId = null } = {}) {
     const id = crypto.randomUUID();
     const timestamp = now();
     this.db
       .prepare(
-        `INSERT INTO snapshot_runs (id, group_id, window_start, window_end, run_type, parent_snapshot_id, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'collecting', ?, ?)`,
+        `INSERT INTO snapshot_runs (id, group_id, window_start, window_end, run_type, parent_snapshot_id, blocked_post_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'collecting', ?, ?)`,
       )
-      .run(id, groupId, windowStart, windowEnd, runType, parentSnapshotId, timestamp, timestamp);
+      .run(id, groupId, windowStart, windowEnd, runType, parentSnapshotId, blockedPostId, timestamp, timestamp);
     return id;
   }
 
@@ -79,41 +79,55 @@ export class AnalyticsDatabase {
       .get(groupId, runType) ?? null;
   }
 
-  getMostRecentPost(snapshotId) {
+  getLatestSnapshot(groupId) {
     return this.db
       .prepare(
-        `SELECT posts.id, posts.group_id, posts.created_at
-         FROM snapshot_posts
-         JOIN posts ON posts.id = snapshot_posts.post_id
-         WHERE snapshot_posts.snapshot_id = ?
-         ORDER BY posts.created_at DESC, posts.id DESC
+        `SELECT id, group_id, window_start, window_end, run_type, parent_snapshot_id, blocked_post_id,
+                status, cursor, pages_fetched, posts_seen, posts_stored, completed_at
+         FROM snapshot_runs
+         WHERE group_id = ?
+         ORDER BY created_at DESC
          LIMIT 1`,
+      )
+      .get(groupId) ?? null;
+  }
+
+  getSnapshot(snapshotId) {
+    return this.db
+      .prepare(
+        `SELECT id, group_id, window_start, window_end, run_type, parent_snapshot_id, blocked_post_id,
+                status, cursor, pages_fetched, posts_seen, posts_stored, completed_at
+         FROM snapshot_runs
+         WHERE id = ?`,
       )
       .get(snapshotId) ?? null;
   }
 
-  clearCaptures(groupId) {
-    this.db.exec("BEGIN");
-    try {
-      this.db.prepare(
-        `DELETE FROM raw_api_responses
-         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
-      ).run(groupId);
-      this.db.prepare(
-        `DELETE FROM snapshot_posts
-         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
-      ).run(groupId);
-      this.db.prepare("DELETE FROM snapshot_runs WHERE group_id = ?").run(groupId);
-      this.db.prepare(
-        `DELETE FROM posts
-         WHERE group_id = ?
-           AND NOT EXISTS (SELECT 1 FROM snapshot_posts WHERE snapshot_posts.post_id = posts.id)`,
-      ).run(groupId);
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
+  getNextBlockablePost(snapshotId) {
+    const candidates = this.db
+      .prepare(
+        `SELECT posts.id, posts.group_id, posts.created_at, posts.metadata_json
+         FROM snapshot_posts
+         JOIN posts ON posts.id = snapshot_posts.post_id
+         WHERE snapshot_posts.snapshot_id = ?
+         ORDER BY posts.created_at DESC, posts.id DESC`,
+      )
+      .all(snapshotId);
+    return candidates.find((post) => !isAuthoredByCurrentUser(post.metadata_json)) ?? null;
+  }
+
+  countSnapshotPosts(snapshotId) {
+    return this.db
+      .prepare("SELECT COUNT(*) AS count FROM snapshot_posts WHERE snapshot_id = ?")
+      .get(snapshotId).count;
+  }
+
+  snapshotHasPost(snapshotId, postId) {
+    return Boolean(
+      this.db
+        .prepare("SELECT 1 FROM snapshot_posts WHERE snapshot_id = ? AND post_id = ?")
+        .get(snapshotId, postId),
+    );
   }
 
   saveRawResponse(snapshotId, endpoint, page, payload) {
@@ -169,6 +183,7 @@ export class AnalyticsDatabase {
         window_end TEXT NOT NULL,
         run_type TEXT NOT NULL DEFAULT 'baseline',
         parent_snapshot_id TEXT,
+        blocked_post_id TEXT,
         status TEXT NOT NULL,
         cursor TEXT,
         pages_fetched INTEGER NOT NULL DEFAULT 0,
@@ -206,6 +221,7 @@ export class AnalyticsDatabase {
     `);
     this.#ensureColumn("snapshot_runs", "run_type", "TEXT NOT NULL DEFAULT 'baseline'");
     this.#ensureColumn("snapshot_runs", "parent_snapshot_id", "TEXT");
+    this.#ensureColumn("snapshot_runs", "blocked_post_id", "TEXT");
   }
 
   #ensureColumn(table, column, definition) {
@@ -229,4 +245,12 @@ function stringOrNull(value) {
 
 function numberOrNull(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isAuthoredByCurrentUser(metadataJson) {
+  try {
+    return JSON.parse(metadataJson)?.authored_by_user === true;
+  } catch {
+    return false;
+  }
 }

@@ -10,7 +10,7 @@ export class SnapshotCollector {
   }
 
   async capture(groupId, capturedAt = new Date(), options = {}) {
-    const { forceNew = false, runType = "baseline", parentSnapshotId = null, window = null } = options;
+    const { forceNew = false, runType = "baseline", parentSnapshotId = null, blockedPostId = null, window = null } = options;
     const completed = !forceNew && this.database.getCompletedSnapshot(groupId, runType);
     if (completed) {
       return {
@@ -32,7 +32,7 @@ export class SnapshotCollector {
       groupId,
       requestedWindow.windowStart,
       requestedWindow.windowEnd,
-      { runType, parentSnapshotId },
+      { runType, parentSnapshotId, blockedPostId },
     );
     const windowStart = resumable?.window_start ?? requestedWindow.windowStart;
     const windowEnd = resumable?.window_end ?? requestedWindow.windowEnd;
