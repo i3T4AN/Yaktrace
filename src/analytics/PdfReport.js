@@ -106,16 +106,16 @@ function wrapLine(line) {
 function pageContent(entries) {
   if (entries.length === 1 && entries[0]?.type === "cover") return coverPageContent(entries[0]);
   let y = 752;
-  const commands = ["0 g"];
+  const commands = ["0 g 0 0 612 792 re f", "1 g"];
   for (const entry of entries) {
     if (entry?.type === "section") {
       const maskedName = printableText(entry.maskedName);
       const maskWidth = maskedName.length * 5.3 + 8;
       const heading = `${entry.label} (${entry.count} posts)`;
       commands.push(
-        `0 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
-        `0 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
-        `0 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
+        `1 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
+        `1 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
+        `1 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
       );
     } else {
       commands.push(`BT /F1 9 Tf 40 ${y} Td (${escapePdfText(entry)}) Tj ET`);
