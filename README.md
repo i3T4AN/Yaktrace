@@ -32,7 +32,7 @@ npm install
 npm run analytics -- capture
 ```
 
-The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it replaces prior local captures for the selected school, locks a UTC window from that moment back three calendar months, collects in-window posts, blocks the source of the newest available non-self post, and repeats that same-window collection until no blockable posts remain. It then unhides all blocked sources. It persists every capture:
+The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it replaces prior local captures for the selected school, locks a UTC window from that moment back three calendar months, collects in-window posts, blocks the source of the newest available non-self post, and repeats that same-window collection until no blockable posts remain. It then unhides all blocked sources and stores one final same-window capture containing only posts authored by the program account. It persists every capture:
 
 - normalized posts with their metadata;
 - immutable raw post-page API response JSON; and

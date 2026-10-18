@@ -69,6 +69,15 @@ try {
     console.log("Unblocking all hidden sources…");
     throwIfSourceError(await api.unhidePostsFromAllUsers(), "unblock all sources");
     console.log("All hidden sources have been unblocked.");
+    console.log("Saving final personal-post capture over the same locked window…");
+    const personal = await collector.capture(selectedGroupId, new Date(), {
+      forceNew: true,
+      runType: "personal_posts",
+      parentSnapshotId: current.id,
+      window: { windowStart: current.window_start, windowEnd: current.window_end },
+      includePost: (post) => post?.authored_by_user === true,
+    });
+    console.log(`Saved final personal-post capture: ${personal.postsStored} posts.`);
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -140,7 +149,7 @@ locks a three-calendar-month UTC window, saves the first capture, then repeatedl
 blocks the next available non-self post source and saves another capture over that
 exact same window until no blockable posts remain. Every capture and its raw
 responses are stored in SQLite. It then unblocks all hidden sources. Each command
-starts a fresh run.
+starts a fresh run, ending with a personal-post-only capture.
 `);
 }
 

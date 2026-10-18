@@ -10,7 +10,7 @@ export class SnapshotCollector {
   }
 
   async capture(groupId, capturedAt = new Date(), options = {}) {
-    const { forceNew = false, runType = "baseline", parentSnapshotId = null, blockedPostId = null, window = null } = options;
+    const { forceNew = false, runType = "baseline", parentSnapshotId = null, blockedPostId = null, includePost = () => true, window = null } = options;
     const completed = !forceNew && this.database.getCompletedSnapshot(groupId, runType);
     if (completed) {
       return {
@@ -68,6 +68,7 @@ export class SnapshotCollector {
         for (const post of posts) {
           if (isBefore(post.created_at, windowStart)) reachedWindowStart = true;
           if (!isInWindow(post.created_at, windowStart, windowEnd)) continue;
+          if (!includePost(post)) continue;
 
           this.database.savePost(snapshotId, post);
           state.postsStored += 1;
