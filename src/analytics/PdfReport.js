@@ -19,7 +19,7 @@ export function generatePdfReport(database, groupId) {
     }, "");
     if (section.posts.length === 0) lines.push("No posts.", "");
     for (const post of section.posts) {
-      lines.push(...formatPost(post), "");
+      lines.push(...formatPost(post));
     }
   }
 
@@ -36,7 +36,9 @@ function formatPost(post) {
     `POST ID: ${post.id}`,
     `TIMESTAMP (UTC): ${post.created_at}`,
     `UPVOTES: ${upvotes(post)}`,
+    "",
     { type: "postText", text: `POST: ${post.text || ""}` },
+    "",
   ];
 }
 
