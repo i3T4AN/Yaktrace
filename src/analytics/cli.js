@@ -21,13 +21,22 @@ try {
   if (command === "login") {
     await authenticate(database, true);
     console.log("Authenticated. Token stored locally in the SQL database.");
-  } else if (command === "capture") {
-    if (!groupId) throw new Error("capture requires --group <group-id>.");
+  } else if (command === "groups") {
     const token = await authenticate(database, relogin);
     const api = new SidechatAPIClient(token);
+    const memberships = await getMemberships(api);
+    console.log("School memberships:");
+    memberships.forEach((membership, index) => {
+      console.log(`${index === 0 ? "* " : "  "}${membership.groupId}${membership.type ? ` (${membership.type})` : ""}`);
+    });
+  } else if (command === "capture") {
+    const token = await authenticate(database, relogin);
+    const api = new SidechatAPIClient(token);
+    const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
+    if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
-    console.log("Authenticating complete. Locking the UTC three-month window and collecting…");
-    const result = await collector.capture(groupId);
+    console.log(`Authenticating complete. Capturing school ${selectedGroupId}. Locking the UTC three-month window and collecting…`);
+    const result = await collector.capture(selectedGroupId);
     console.log(`Completed snapshot ${result.snapshotId}`);
     console.log(`Window: ${result.windowStart} → ${result.windowEnd}`);
     console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}; comments: ${result.commentsStored}`);
@@ -39,6 +48,19 @@ try {
   process.exitCode = 1;
 } finally {
   database.close();
+}
+
+async function getMemberships(api) {
+  const currentUser = await api.getCurrentUser();
+  const memberships = Array.isArray(currentUser?.memberships) ? currentUser.memberships : [];
+  const normalized = memberships
+    .map((membership) => ({
+      groupId: membership?.groupId ?? membership?.group_id,
+      type: membership?.type,
+    }))
+    .filter((membership) => typeof membership.groupId === "string" && membership.groupId.length > 0);
+  if (normalized.length === 0) throw new Error("No school memberships were returned for this account.");
+  return normalized;
 }
 
 async function authenticate(database, forceLogin) {
@@ -81,9 +103,11 @@ function printHelp() {
   console.log(`
 Usage:
   npm run analytics -- login [--database path/to/data.sqlite]
-  npm run analytics -- capture --group GROUP_ID [--relogin] [--database path/to/data.sqlite]
+  npm run analytics -- groups [--relogin] [--database path/to/data.sqlite]
+  npm run analytics -- capture [--group GROUP_ID] [--relogin] [--database path/to/data.sqlite]
 
-capture authenticates if needed, locks a three-calendar-month UTC window once,
-then stores in-window posts, comments, source metadata, and raw API responses in SQLite.
+capture authenticates if needed, defaults to the account's primary school membership,
+locks a three-calendar-month UTC window once, then stores in-window posts,
+comments, source metadata, and raw API responses in SQLite.
 `);
 }
