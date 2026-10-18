@@ -36,6 +36,8 @@ try {
     const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
     if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
+    console.log("Unblocking all hidden sources before the fresh capture…");
+    await performSourceAction(() => api.unhidePostsFromAllUsers(), "unblock all sources before capture");
     database.clearCaptures(selectedGroupId);
     console.log(`Authenticating complete. Starting a fresh capture for school ${selectedGroupId}; locking the UTC three-month window…`);
     const initial = await collector.capture(selectedGroupId, new Date(), { forceNew: true });

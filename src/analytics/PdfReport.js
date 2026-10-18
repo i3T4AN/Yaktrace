@@ -7,8 +7,8 @@ export function generatePdfReport(database, groupId) {
   const schoolName = model.groupName || "School";
   const title = `${projectName} - ${schoolName}`;
   const lines = [
-    title,
-    `Capture window (UTC): ${model.windowStart} - ${model.windowEnd}`,
+    { type: "title", text: title },
+    { type: "subtitle", text: `Capture window (UTC): ${model.windowStart} - ${model.windowEnd}` },
     "",
   ];
 
@@ -37,8 +37,19 @@ export function generatePdfReport(database, groupId) {
 function formatPost(post) {
   return [
     `POST ID: ${post.id}`,
+    `TIMESTAMP (UTC): ${post.created_at}`,
+    `UPVOTES: ${upvotes(post)}`,
     `POST: ${post.text || ""}`,
   ];
+}
+
+function upvotes(post) {
+  try {
+    const metadata = JSON.parse(post.metadata_json);
+    return metadata.upvote_count ?? metadata.upvotes ?? post.vote_total ?? "";
+  } catch {
+    return post.vote_total ?? "";
+  }
 }
 
 function buildPdf(lines) {
@@ -97,13 +108,18 @@ function pageContent(entries) {
   let y = 752;
   const commands = ["0 g"];
   for (const entry of entries) {
-    if (entry?.type === "section") {
+    if (entry?.type === "title") {
+      commands.push(`BT /F1 18 Tf 40 ${y} Td (${escapePdfText(printableText(entry.text))}) Tj ET`);
+      y -= 13;
+    } else if (entry?.type === "subtitle") {
+      commands.push(`BT /F1 10 Tf 40 ${y} Td (${escapePdfText(printableText(entry.text))}) Tj ET`);
+    } else if (entry?.type === "section") {
       const maskedName = printableText(entry.maskedName);
       const maskWidth = maskedName.length * 5.3 + 8;
       const heading = `${entry.label}: ${entry.title} (${entry.count} posts)`;
       commands.push(
         `0 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
-        `1 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
+        `0 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
         `0 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
       );
     } else {
