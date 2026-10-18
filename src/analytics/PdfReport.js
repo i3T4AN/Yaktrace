@@ -7,7 +7,7 @@ export function generatePdfReport(database, groupId) {
   const schoolName = model.groupName || "School";
   const title = `${projectName} - ${schoolName}`;
   const lines = [
-    { type: "cover", title, windowStart: model.windowStart, windowEnd: model.windowEnd },
+    { type: "cover", title, schoolName, windowStart: model.windowStart, windowEnd: model.windowEnd },
   ];
 
   for (const [index, section] of model.sections.entries()) {
@@ -127,11 +127,12 @@ function pageContent(entries) {
 
 function coverPageContent(cover) {
   const title = printableText(cover.title);
+  const releaseLabel = printableText(`${cover.schoolName} FILE RELEASE`);
   const windowStart = printableText(cover.windowStart);
   const windowEnd = printableText(cover.windowEnd);
   return [
     "0 g 0 0 612 792 re f",
-    "1 g BT /F1 10 Tf 48 716 Td (YIKSTEIN ANALYSIS) Tj ET",
+    "1 g BT /F1 10 Tf 48 716 Td (" + escapePdfText(releaseLabel) + ") Tj ET",
     "1 g BT /F1 30 Tf 48 638 Td (" + escapePdfText(title) + ") Tj ET",
     "0.72 g BT /F1 10 Tf 48 548 Td (CAPTURE WINDOW / UTC) Tj ET",
     "1 g BT /F1 12 Tf 48 522 Td (" + escapePdfText(windowStart) + ") Tj ET",
