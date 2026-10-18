@@ -54,11 +54,14 @@ export class SnapshotCollector {
 
       do {
         const page = await withRateLimitRetry(
-          () => this.api.getGroupPosts(groupId, "recent", state.cursor || undefined),
+          async () => {
+            const response = await this.api.getGroupPosts(groupId, "recent", state.cursor || undefined);
+            throwIfSourceError(response, "fetch posts");
+            return response;
+          },
           "fetch posts",
           this.pacer,
         );
-        throwIfSourceError(page, "fetch posts");
         const posts = Array.isArray(page.posts) ? page.posts : [];
         state.pagesFetched += 1;
         state.postsSeen += posts.length;
@@ -103,7 +106,11 @@ async function withRateLimitRetry(operation, description, pacer) {
       return await operation();
     } catch (error) {
       if (!isRateLimit(error) || attempt === MAX_RATE_LIMIT_RETRIES) throw error;
-      const delayMs = 5_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
+      const backoffMs = 5_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
+      const retryAfterMs = Number(error?.retryAfterSeconds) * 1_000;
+      const delayMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+        ? Math.max(backoffMs, retryAfterMs)
+        : backoffMs;
       console.warn(`Rate limited while trying to ${description}. Retrying in ${Math.ceil(delayMs / 1_000)} seconds…`);
       pacer.coolDown(delayMs);
       await delay(delayMs);
@@ -130,8 +137,8 @@ class RequestPacer {
 }
 
 function isRateLimit(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /\b429\b|rate.?limit|too many requests/i.test(message);
+  const message = error instanceof Error ? error.message : JSON.stringify(error);
+  return error?.retryable === true || error?.status === 429 || /\b429\b|rate.?limit|too many requests/i.test(message);
 }
 
 function delay(milliseconds) {
@@ -178,5 +185,16 @@ function isBefore(value, boundary) {
 }
 
 function throwIfSourceError(payload, action) {
-  if (payload?.message && !payload?.posts) throw new Error(`Could not ${action}: ${payload.message}`);
+  if (!payload || typeof payload !== "object") return;
+  const message = payload.error ?? payload.message;
+  if (!message || Array.isArray(payload.posts)) return;
+  const error = new Error(`Could not ${action}: ${message}`);
+  const retryAfterSeconds = Number(payload.retry_after_seconds);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    error.retryAfterSeconds = retryAfterSeconds;
+  }
+  if (payload.status === 429 || /\b429\b|rate.?limit|too many requests/i.test(String(message))) {
+    error.status = 429;
+  }
+  throw error;
 }

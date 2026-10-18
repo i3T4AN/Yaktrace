@@ -341,9 +341,31 @@ class SidechatAPIClient {
           },
         },
       );
-      const json = await res.json();
+      const retryAfterSeconds = parseRetryAfter(res.headers.get("retry-after"));
+      const body = await res.text();
+      let json;
+      try {
+        json = JSON.parse(body);
+      } catch {
+        const rateLimited = res.status === 429 || /too many requests|rate.?limit/i.test(body);
+        const message = rateLimited
+          ? "Too many requests"
+          : `Post service returned non-JSON HTTP ${res.status}.`;
+        const error = sourceResponseError(message, res.status, retryAfterSeconds);
+        error.retryable = true;
+        throw error;
+      }
+
+      if (!res.ok) {
+        throw sourceResponseError(
+          json?.error ?? json?.message ?? `Post service returned HTTP ${res.status}.`,
+          res.status,
+          retryAfterSeconds ?? json?.retry_after_seconds,
+        );
+      }
       return json;
     } catch (err) {
+      if (err instanceof SidechatAPIError) throw err;
       console.error(err);
       throw new SidechatAPIError(`Failed to get posts from group.`);
     }
@@ -1439,6 +1461,21 @@ class SidechatAPIClient {
       throw new SidechatAPIError(`Failed to unhide post.`);
     }
   };
+}
+
+function sourceResponseError(message, status, retryAfterSeconds) {
+  const error = new SidechatAPIError(String(message));
+  error.status = status;
+  const parsedRetryAfter = Number(retryAfterSeconds);
+  if (Number.isFinite(parsedRetryAfter) && parsedRetryAfter > 0) {
+    error.retryAfterSeconds = parsedRetryAfter;
+  }
+  return error;
+}
+
+function parseRetryAfter(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
 export default SidechatAPIClient;
