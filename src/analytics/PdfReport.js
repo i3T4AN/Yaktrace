@@ -1,19 +1,25 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 export function generatePdfReport(database, groupId) {
   const model = database.getReportModel(groupId);
-  const projectName = basename(process.cwd());
+  const projectName = basename(dirname(process.cwd()));
   const schoolName = model.groupName || "School";
-  const title = `${projectName} — ${schoolName}`;
+  const title = `${projectName} - ${schoolName}`;
   const lines = [
     title,
-    `Locked window: ${model.windowStart} to ${model.windowEnd}`,
+    `Capture window (UTC): ${model.windowStart} - ${model.windowEnd}`,
     "",
   ];
 
-  for (const section of model.sections) {
-    lines.push(`${section.label}: ${section.title} (${section.posts.length} posts)`, "");
+  for (const [index, section] of model.sections.entries()) {
+    lines.push({
+      type: "section",
+      maskedName: index % 2 === 0 ? "John Doe" : "Jane Doe",
+      label: section.label,
+      title: section.title,
+      count: section.posts.length,
+    }, "");
     if (section.posts.length === 0) lines.push("No posts.", "");
     for (const post of section.posts) {
       lines.push(...formatPost(post), "");
@@ -38,7 +44,7 @@ function formatPost(post) {
 }
 
 function buildPdf(lines) {
-  const pages = paginate(lines.flatMap(wrapLine));
+  const pages = paginate(lines.flatMap(wrapEntry));
   const objects = new Map();
   objects.set(1, "<< /Type /Catalog /Pages 2 0 R >>");
   const pageObjectIds = pages.map((_, index) => 4 + index * 2);
@@ -48,14 +54,7 @@ function buildPdf(lines) {
   pages.forEach((page, index) => {
     const pageObjectId = pageObjectIds[index];
     const contentObjectId = pageObjectId + 1;
-    const content = [
-      "BT",
-      "/F1 9 Tf",
-      "40 752 Td",
-      "11 TL",
-      ...page.map((line) => `(${escapePdfText(line)}) Tj T*`),
-      "ET",
-    ].join("\n");
+    const content = pageContent(page);
     objects.set(pageObjectId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjectId} 0 R >>`);
     objects.set(contentObjectId, `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`);
   });
@@ -82,6 +81,11 @@ function paginate(lines) {
   return pages.length > 0 ? pages : [[""]];
 }
 
+function wrapEntry(entry) {
+  if (typeof entry !== "string") return [entry];
+  return wrapLine(entry);
+}
+
 function wrapLine(line) {
   const text = printableText(line);
   const width = 92;
@@ -89,6 +93,27 @@ function wrapLine(line) {
   const chunks = [];
   for (let index = 0; index < text.length; index += width) chunks.push(text.slice(index, index + width));
   return chunks;
+}
+
+function pageContent(entries) {
+  let y = 752;
+  const commands = ["0 g"];
+  for (const entry of entries) {
+    if (entry?.type === "section") {
+      const maskedName = printableText(entry.maskedName);
+      const maskWidth = maskedName.length * 5.3 + 8;
+      const heading = `${entry.label}: ${entry.title} (${entry.count} posts)`;
+      commands.push(
+        `0 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
+        `1 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
+        `0 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
+      );
+    } else {
+      commands.push(`BT /F1 9 Tf 40 ${y} Td (${escapePdfText(entry)}) Tj ET`);
+    }
+    y -= 11;
+  }
+  return commands.join("\n");
 }
 
 function printableText(value) {
