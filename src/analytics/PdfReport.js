@@ -36,7 +36,7 @@ function formatPost(post) {
     `POST ID: ${post.id}`,
     `TIMESTAMP (UTC): ${post.created_at}`,
     `UPVOTES: ${upvotes(post)}`,
-    `POST: ${post.text || ""}`,
+    { type: "postText", text: `POST: ${post.text || ""}` },
   ];
 }
 
@@ -83,20 +83,33 @@ function buildPdf(lines) {
 }
 
 function paginate(lines) {
-  const pageLength = 63;
   const pages = [];
-  for (let index = 0; index < lines.length; index += pageLength) pages.push(lines.slice(index, index + pageLength));
+  let page = [];
+  let usedHeight = 0;
+  for (const line of lines) {
+    const height = entryHeight(line);
+    if (page.length > 0 && usedHeight + height > 700) {
+      pages.push(page);
+      page = [];
+      usedHeight = 0;
+    }
+    page.push(line);
+    usedHeight += height;
+  }
+  if (page.length > 0) pages.push(page);
   return pages.length > 0 ? pages : [[""]];
 }
 
 function wrapEntry(entry) {
+  if (entry?.type === "postText") {
+    return wrapLine(entry.text, 64).map((text) => ({ type: "postText", text }));
+  }
   if (typeof entry !== "string") return [entry];
   return wrapLine(entry);
 }
 
-function wrapLine(line) {
+function wrapLine(line, width = 92) {
   const text = printableText(line);
-  const width = 92;
   if (text.length <= width) return [text];
   const chunks = [];
   for (let index = 0; index < text.length; index += width) chunks.push(text.slice(index, index + width));
@@ -117,12 +130,18 @@ function pageContent(entries) {
         `1 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
         `1 g BT /F1 10 Tf ${(44 + maskWidth).toFixed(1)} ${y} Td (${escapePdfText(printableText(heading))}) Tj ET`,
       );
+    } else if (entry?.type === "postText") {
+      commands.push(`BT /F1 14 Tf 40 ${y} Td (${escapePdfText(entry.text)}) Tj ET`);
     } else {
       commands.push(`BT /F1 9 Tf 40 ${y} Td (${escapePdfText(entry)}) Tj ET`);
     }
-    y -= 11;
+    y -= entryHeight(entry);
   }
   return commands.join("\n");
+}
+
+function entryHeight(entry) {
+  return entry?.type === "postText" ? 16 : 11;
 }
 
 function coverPageContent(cover) {
