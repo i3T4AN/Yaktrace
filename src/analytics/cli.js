@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SidechatAPIClient } from "../index.js";
 import { AnalyticsDatabase } from "./AnalyticsDatabase.js";
+import { generatePdfReport } from "./PdfReport.js";
 import { SnapshotCollector } from "./SnapshotCollector.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -84,6 +85,8 @@ try {
       includePost: (post) => post?.authored_by_user === true,
     });
     console.log(`Saved final personal-post capture: ${personal.postsStored} posts.`);
+    const reportPath = generatePdfReport(database, selectedGroupId);
+    console.log(`Saved PDF report: ${reportPath}`);
   } else {
     throw new Error(`Unknown command: ${command}`);
   }

@@ -149,6 +149,77 @@ export class AnalyticsDatabase {
     }
   }
 
+  getReportModel(groupId) {
+    const group = this.db.prepare("SELECT name FROM groups WHERE id = ?").get(groupId) ?? null;
+    const snapshots = this.db
+      .prepare(
+        `SELECT id, run_type, parent_snapshot_id, blocked_post_id, status, window_start, window_end, created_at, completed_at
+         FROM snapshot_runs
+         WHERE group_id = ?
+         ORDER BY created_at`,
+      )
+      .all(groupId);
+    if (snapshots.length === 0) throw new Error("No capture data exists for this school.");
+    if (snapshots.some((snapshot) => snapshot.status !== "complete")) {
+      throw new Error("The capture is not complete yet; the PDF is created only after the final capture finishes.");
+    }
+
+    const baseline = snapshots.find((snapshot) => snapshot.run_type === "baseline");
+    const personal = [...snapshots].reverse().find((snapshot) => snapshot.run_type === "personal_posts");
+    if (!baseline || !personal) throw new Error("A complete baseline and final personal-post capture are required for the PDF.");
+
+    const sections = [{
+      label: "U1",
+      title: "Final personal posts",
+      posts: this.#getSnapshotPosts(personal.id),
+    }];
+    let parent = baseline;
+    let unit = 2;
+    while (true) {
+      const child = snapshots.find((snapshot) => snapshot.run_type === "blocked_author" && snapshot.parent_snapshot_id === parent.id);
+      if (!child) break;
+      sections.push({
+        label: `U${unit}`,
+        title: `Posts missing from run ${unit - 1} to run ${unit}`,
+        posts: this.#getPostsMissingFromChild(parent.id, child.id),
+      });
+      parent = child;
+      unit += 1;
+    }
+    return {
+      groupName: group?.name ?? null,
+      windowStart: baseline.window_start,
+      windowEnd: baseline.window_end,
+      sections,
+    };
+  }
+
+  #getSnapshotPosts(snapshotId) {
+    return this.db
+      .prepare(
+        `SELECT posts.id, posts.created_at, posts.text, posts.alias, posts.vote_total, posts.comment_count, posts.metadata_json
+         FROM snapshot_posts
+         JOIN posts ON posts.id = snapshot_posts.post_id
+         WHERE snapshot_posts.snapshot_id = ?
+         ORDER BY posts.created_at DESC, posts.id DESC`,
+      )
+      .all(snapshotId);
+  }
+
+  #getPostsMissingFromChild(parentSnapshotId, childSnapshotId) {
+    return this.db
+      .prepare(
+        `SELECT posts.id, posts.created_at, posts.text, posts.alias, posts.vote_total, posts.comment_count, posts.metadata_json
+         FROM snapshot_posts AS parent
+         JOIN posts ON posts.id = parent.post_id
+         LEFT JOIN snapshot_posts AS child
+           ON child.snapshot_id = ? AND child.post_id = parent.post_id
+         WHERE parent.snapshot_id = ? AND child.post_id IS NULL
+         ORDER BY posts.created_at DESC, posts.id DESC`,
+      )
+      .all(childSnapshotId, parentSnapshotId);
+  }
+
   saveRawResponse(snapshotId, endpoint, page, payload) {
     this.db
       .prepare(

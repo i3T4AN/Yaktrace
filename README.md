@@ -41,3 +41,5 @@ The command prompts for the account's SMS login only when no saved local session
 The command defaults to the authenticated account's primary school membership. You may override that with `--group GROUP_ID`; use `npm run analytics -- groups` to print the memberships returned by the source API. The database is local at `data/yikstein.sqlite`, excluded from Git, and its file permissions are set to owner-only. Use `npm run analytics -- login` to authenticate without starting a collection, or append `--relogin` to force a new SMS login.
 
 Every `capture` command is one fresh end-to-end run. Post-page retrieval uses one global limit of ten requests per second. If the service returns a rate-limit response, the collector uses exponential cooldown and keeps the same snapshot window and cursor. You may tune the global limit with `YIKSTEIN_REQUESTS_PER_SECOND`, but increasing it can cause more throttling.
+
+When the run completes, it writes a local PDF to `reports/`. Its title combines the project-folder name and school name. U1 contains the final personal-post capture; U2 and each following unit contain the posts missing between consecutive baseline/block snapshots.
