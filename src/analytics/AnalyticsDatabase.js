@@ -67,6 +67,18 @@ export class AnalyticsDatabase {
       .get(groupId) ?? null;
   }
 
+  getCompletedSnapshot(groupId) {
+    return this.db
+      .prepare(
+        `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, comments_stored, completed_at
+         FROM snapshot_runs
+         WHERE group_id = ? AND status = 'complete'
+         ORDER BY completed_at DESC
+         LIMIT 1`,
+      )
+      .get(groupId) ?? null;
+  }
+
   saveRawResponse(snapshotId, endpoint, page, payload) {
     this.db
       .prepare(

@@ -37,7 +37,7 @@ try {
     const collector = new SnapshotCollector(api, database);
     console.log(`Authenticating complete. Capturing school ${selectedGroupId}. Locking or resuming the UTC three-month window and collecting…`);
     const result = await collector.capture(selectedGroupId);
-    console.log(`Completed snapshot ${result.snapshotId}`);
+    console.log(`${result.alreadyComplete ? "Reused completed" : "Completed"} snapshot ${result.snapshotId}`);
     console.log(`Window: ${result.windowStart} → ${result.windowEnd}`);
     console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}; comments: ${result.commentsStored}`);
   } else {
