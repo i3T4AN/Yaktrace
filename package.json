@@ -24,6 +24,7 @@
     }
   },
   "scripts": {
+    "analytics": "node --experimental-sqlite src/analytics/cli.js",
     "build": "rollup -c",
     "dev": "rollup -c --watch",
     "docs": "jsdoc --configure jsdoc.json --verbose",

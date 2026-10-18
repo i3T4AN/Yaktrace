@@ -20,3 +20,22 @@ $ npm install sidechat.js
 ```
 
 Next, take a look at the [authentication tutorial](https://micahlindley.com/sidechat.js/tutorial-Authentication.html) to find out how to log your client in and begin making requests.
+
+## Local fixed-window capture
+
+The repository includes a local-only CLI for the authorized analytics workflow. It uses Node's built-in SQLite support—no dashboard, service, container, or deployment is involved.
+
+Use Node 22.13 or newer, install dependencies, then run:
+
+```bash
+npm install
+npm run analytics -- capture --group YOUR_GROUP_ID
+```
+
+The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it locks a UTC window from that moment back three calendar months, collects in-window posts and comments, and persists:
+
+- normalized posts and comments with their metadata;
+- immutable raw API response JSON; and
+- snapshot timestamps, cursors, and collection counts.
+
+The database is local at `data/yikstein.sqlite`, excluded from Git, and its file permissions are set to owner-only. Use `npm run analytics -- login` to authenticate without starting a collection, or append `--relogin` to force a new SMS login.
