@@ -16,8 +16,7 @@ export function generatePdfReport(database, groupId) {
     lines.push({
       type: "section",
       maskedName: index % 2 === 0 ? "John Doe" : "Jane Doe",
-      label: section.label,
-      title: section.title,
+      label: `User-${String(index + 1).padStart(3, "0")}`,
       count: section.posts.length,
     }, "");
     if (section.posts.length === 0) lines.push("No posts.", "");
@@ -116,7 +115,7 @@ function pageContent(entries) {
     } else if (entry?.type === "section") {
       const maskedName = printableText(entry.maskedName);
       const maskWidth = maskedName.length * 5.3 + 8;
-      const heading = `${entry.label}: ${entry.title} (${entry.count} posts)`;
+      const heading = `${entry.label} (${entry.count} posts)`;
       commands.push(
         `0 g 40 ${y - 2} ${maskWidth.toFixed(1)} 11 re f`,
         `0 g BT /F1 9 Tf 44 ${y} Td (${escapePdfText(maskedName)}) Tj ET`,
