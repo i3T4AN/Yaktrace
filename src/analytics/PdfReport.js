@@ -139,7 +139,7 @@ function coverPageContent(cover) {
     "1 g BT /F1 12 Tf 48 498 Td (TO) Tj ET",
     "1 g BT /F1 12 Tf 48 474 Td (" + escapePdfText(windowEnd) + ") Tj ET",
     "0.72 g 48 144 516 1 re f",
-    "0.72 g BT /F1 9 Tf 48 118 Td (POST-BLOCK DIFFERENCE ANALYSIS) Tj ET",
+    "0.72 g BT /F1 9 Tf 48 118 Td (POST-BLOCK DIFFERENCE ANALYSIS: AS ANONYMOUS AS YOU'LL ALLOW YOURSELF TO BE :\\) Tj ET",
   ].join("\n");
 }
 
