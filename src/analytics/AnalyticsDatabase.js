@@ -187,7 +187,7 @@ export class AnalyticsDatabase {
       unit += 1;
     }
     return {
-      groupName: group?.name ?? null,
+      groupName: this.#getPostGroupName(groupId) ?? group?.name ?? null,
       windowStart: baseline.window_start,
       windowEnd: baseline.window_end,
       sections,
@@ -204,6 +204,18 @@ export class AnalyticsDatabase {
          ORDER BY posts.created_at DESC, posts.id DESC`,
       )
       .all(snapshotId);
+  }
+
+  #getPostGroupName(groupId) {
+    const row = this.db
+      .prepare("SELECT metadata_json FROM posts WHERE group_id = ? ORDER BY created_at DESC LIMIT 1")
+      .get(groupId);
+    try {
+      const name = JSON.parse(row?.metadata_json ?? "null")?.group?.name;
+      return typeof name === "string" && name.length > 0 ? name : null;
+    } catch {
+      return null;
+    }
   }
 
   #getPostsMissingFromChild(parentSnapshotId, childSnapshotId) {

@@ -7,9 +7,7 @@ export function generatePdfReport(database, groupId) {
   const schoolName = model.groupName || "School";
   const title = `${projectName} - ${schoolName}`;
   const lines = [
-    { type: "title", text: title },
-    { type: "subtitle", text: `Capture window (UTC): ${model.windowStart} - ${model.windowEnd}` },
-    "",
+    { type: "cover", title, windowStart: model.windowStart, windowEnd: model.windowEnd },
   ];
 
   for (const [index, section] of model.sections.entries()) {
@@ -52,7 +50,9 @@ function upvotes(post) {
 }
 
 function buildPdf(lines) {
-  const pages = paginate(lines.flatMap(wrapEntry));
+  const cover = lines.find((entry) => entry?.type === "cover");
+  const body = lines.filter((entry) => entry?.type !== "cover").flatMap(wrapEntry);
+  const pages = cover ? [[cover], ...paginate(body)] : paginate(body);
   const objects = new Map();
   objects.set(1, "<< /Type /Catalog /Pages 2 0 R >>");
   const pageObjectIds = pages.map((_, index) => 4 + index * 2);
@@ -104,15 +104,11 @@ function wrapLine(line) {
 }
 
 function pageContent(entries) {
+  if (entries.length === 1 && entries[0]?.type === "cover") return coverPageContent(entries[0]);
   let y = 752;
   const commands = ["0 g"];
   for (const entry of entries) {
-    if (entry?.type === "title") {
-      commands.push(`BT /F1 18 Tf 40 ${y} Td (${escapePdfText(printableText(entry.text))}) Tj ET`);
-      y -= 13;
-    } else if (entry?.type === "subtitle") {
-      commands.push(`BT /F1 10 Tf 40 ${y} Td (${escapePdfText(printableText(entry.text))}) Tj ET`);
-    } else if (entry?.type === "section") {
+    if (entry?.type === "section") {
       const maskedName = printableText(entry.maskedName);
       const maskWidth = maskedName.length * 5.3 + 8;
       const heading = `${entry.label} (${entry.count} posts)`;
@@ -127,6 +123,24 @@ function pageContent(entries) {
     y -= 11;
   }
   return commands.join("\n");
+}
+
+function coverPageContent(cover) {
+  const title = printableText(cover.title);
+  const windowStart = printableText(cover.windowStart);
+  const windowEnd = printableText(cover.windowEnd);
+  return [
+    "0 g 0 0 612 792 re f",
+    "1 g BT /F1 10 Tf 48 716 Td (FIXED-WINDOW FIELD DOSSIER) Tj ET",
+    "1 g BT /F1 30 Tf 48 638 Td (" + escapePdfText(title) + ") Tj ET",
+    "0.72 g BT /F1 11 Tf 48 584 Td (AUTHORIZED SYNTHETIC ENVIRONMENT) Tj ET",
+    "0.72 g BT /F1 10 Tf 48 536 Td (COLLECTION WINDOW / UTC) Tj ET",
+    "1 g BT /F1 12 Tf 48 510 Td (" + escapePdfText(windowStart) + ") Tj ET",
+    "1 g BT /F1 12 Tf 48 486 Td (TO) Tj ET",
+    "1 g BT /F1 12 Tf 48 462 Td (" + escapePdfText(windowEnd) + ") Tj ET",
+    "0.72 g 48 144 516 1 re f",
+    "0.72 g BT /F1 9 Tf 48 118 Td (POST-BLOCK DIFFERENCE ANALYSIS) Tj ET",
+  ].join("\n");
 }
 
 function printableText(value) {
