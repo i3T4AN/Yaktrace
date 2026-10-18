@@ -79,19 +79,6 @@ export class AnalyticsDatabase {
       .get(groupId, runType) ?? null;
   }
 
-  getLatestSnapshot(groupId) {
-    return this.db
-      .prepare(
-        `SELECT id, group_id, window_start, window_end, run_type, parent_snapshot_id, blocked_post_id,
-                status, cursor, pages_fetched, posts_seen, posts_stored, completed_at
-         FROM snapshot_runs
-         WHERE group_id = ?
-         ORDER BY created_at DESC
-         LIMIT 1`,
-      )
-      .get(groupId) ?? null;
-  }
-
   getSnapshot(snapshotId) {
     return this.db
       .prepare(
@@ -128,6 +115,30 @@ export class AnalyticsDatabase {
         .prepare("SELECT 1 FROM snapshot_posts WHERE snapshot_id = ? AND post_id = ?")
         .get(snapshotId, postId),
     );
+  }
+
+  clearCaptures(groupId) {
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare(
+        `DELETE FROM raw_api_responses
+         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
+      ).run(groupId);
+      this.db.prepare(
+        `DELETE FROM snapshot_posts
+         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
+      ).run(groupId);
+      this.db.prepare("DELETE FROM snapshot_runs WHERE group_id = ?").run(groupId);
+      this.db.prepare(
+        `DELETE FROM posts
+         WHERE group_id = ?
+           AND NOT EXISTS (SELECT 1 FROM snapshot_posts WHERE snapshot_posts.post_id = posts.id)`,
+      ).run(groupId);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   saveRawResponse(snapshotId, endpoint, page, payload) {

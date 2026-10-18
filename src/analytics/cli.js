@@ -35,26 +35,10 @@ try {
     const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
     if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
-    let current = database.getLatestSnapshot(selectedGroupId);
-    if (!current) {
-      console.log(`Authenticating complete. First capture for school ${selectedGroupId}; locking the UTC three-month window…`);
-      const initial = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
-      current = database.getSnapshot(initial.snapshotId);
-    } else if (current.status !== "complete") {
-      console.log("Resuming the interrupted capture before continuing blocks…");
-      const resumed = await collector.capture(selectedGroupId, new Date(), {
-        forceNew: true,
-        runType: current.run_type,
-        parentSnapshotId: current.parent_snapshot_id,
-        blockedPostId: current.blocked_post_id,
-        window: { windowStart: current.window_start, windowEnd: current.window_end },
-      });
-      current = database.getSnapshot(resumed.snapshotId);
-    }
-
-    if (current.blocked_post_id && database.snapshotHasPost(current.id, current.blocked_post_id)) {
-      throw new Error("The prior blocked post is still present in the latest capture; stopping to avoid blocking it again.");
-    }
+    database.clearCaptures(selectedGroupId);
+    console.log(`Authenticating complete. Starting a fresh capture for school ${selectedGroupId}; locking the UTC three-month window…`);
+    const initial = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
+    let current = database.getSnapshot(initial.snapshotId);
 
     let blocksCompleted = 0;
     while (database.countSnapshotPosts(current.id) > 0) {
@@ -152,7 +136,7 @@ capture authenticates if needed, defaults to the account's primary school member
 locks a three-calendar-month UTC window, saves the first capture, then repeatedly
 blocks the next available non-self post source and saves another capture over that
 exact same window until no blockable posts remain. Every capture and its raw
-responses are stored in SQLite. Interrupted captures resume from their saved cursor.
+responses are stored in SQLite. Each command starts a fresh run.
 `);
 }
 
