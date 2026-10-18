@@ -131,13 +131,12 @@ function coverPageContent(cover) {
   const windowEnd = printableText(cover.windowEnd);
   return [
     "0 g 0 0 612 792 re f",
-    "1 g BT /F1 10 Tf 48 716 Td (FIXED-WINDOW FIELD DOSSIER) Tj ET",
+    "1 g BT /F1 10 Tf 48 716 Td (YIKSTEIN ANALYSIS) Tj ET",
     "1 g BT /F1 30 Tf 48 638 Td (" + escapePdfText(title) + ") Tj ET",
-    "0.72 g BT /F1 11 Tf 48 584 Td (AUTHORIZED SYNTHETIC ENVIRONMENT) Tj ET",
-    "0.72 g BT /F1 10 Tf 48 536 Td (COLLECTION WINDOW / UTC) Tj ET",
-    "1 g BT /F1 12 Tf 48 510 Td (" + escapePdfText(windowStart) + ") Tj ET",
-    "1 g BT /F1 12 Tf 48 486 Td (TO) Tj ET",
-    "1 g BT /F1 12 Tf 48 462 Td (" + escapePdfText(windowEnd) + ") Tj ET",
+    "0.72 g BT /F1 10 Tf 48 548 Td (CAPTURE WINDOW / UTC) Tj ET",
+    "1 g BT /F1 12 Tf 48 522 Td (" + escapePdfText(windowStart) + ") Tj ET",
+    "1 g BT /F1 12 Tf 48 498 Td (TO) Tj ET",
+    "1 g BT /F1 12 Tf 48 474 Td (" + escapePdfText(windowEnd) + ") Tj ET",
     "0.72 g 48 144 516 1 re f",
     "0.72 g BT /F1 9 Tf 48 118 Td (POST-BLOCK DIFFERENCE ANALYSIS) Tj ET",
   ].join("\n");
