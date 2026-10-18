@@ -91,6 +91,14 @@ export class AnalyticsDatabase {
   }
 
   getNextBlockablePost(snapshotId) {
+    return this.#getBlockablePosts(snapshotId)[0] ?? null;
+  }
+
+  countBlockablePosts(snapshotId) {
+    return this.#getBlockablePosts(snapshotId).length;
+  }
+
+  #getBlockablePosts(snapshotId) {
     const candidates = this.db
       .prepare(
         `SELECT posts.id, posts.group_id, posts.created_at, posts.metadata_json
@@ -100,7 +108,7 @@ export class AnalyticsDatabase {
          ORDER BY posts.created_at DESC, posts.id DESC`,
       )
       .all(snapshotId);
-    return candidates.find((post) => !isAuthoredByCurrentUser(post.metadata_json)) ?? null;
+    return candidates.filter((post) => !isAuthoredByCurrentUser(post.metadata_json));
   }
 
   countSnapshotPosts(snapshotId) {

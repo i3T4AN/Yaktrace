@@ -40,7 +40,9 @@ try {
     const initial = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
     let current = database.getSnapshot(initial.snapshotId);
 
+    const initialBlockablePosts = database.countBlockablePosts(current.id);
     let blocksCompleted = 0;
+    console.log(`Iteration 0 complete: ${initialBlockablePosts} blockable posts in the locked window.`);
     while (database.countSnapshotPosts(current.id) > 0) {
       const nextBlockablePost = database.getNextBlockablePost(current.id);
       if (!nextBlockablePost) {
@@ -61,7 +63,8 @@ try {
         throw new Error("The blocked post is still present after its follow-up capture; stopping to avoid repeating the same block.");
       }
       blocksCompleted += 1;
-      console.log(`Saved follow-up capture ${blocksCompleted}: ${database.countSnapshotPosts(current.id)} posts remain.`);
+      const remainingBlockablePosts = database.countBlockablePosts(current.id);
+      console.log(iterationProgress(blocksCompleted, initialBlockablePosts, remainingBlockablePosts));
     }
     if (database.countSnapshotPosts(current.id) === 0) {
       console.log(`Complete. The locked window is exhausted after ${blocksCompleted} blocks.`);
@@ -158,4 +161,16 @@ function throwIfSourceError(payload, action) {
   if (payload.success === false || payload.error || payload.errors || (typeof payload.message === "string" && /forbidden|error|failed/i.test(payload.message))) {
     throw new Error(`Could not ${action}: ${payload.message ?? payload.error ?? "source service rejected the request"}`);
   }
+}
+
+function iterationProgress(iteration, initial, remaining) {
+  const removed = Math.max(0, initial - remaining);
+  const ratio = initial > 0 ? removed / initial : 1;
+  const width = 24;
+  const complete = Math.round(ratio * width);
+  const bar = `${"#".repeat(complete)}${"-".repeat(width - complete)}`;
+  const averageRemoved = iteration > 0 ? removed / iteration : 0;
+  const estimatedRemaining = averageRemoved > 0 ? Math.ceil(remaining / averageRemoved) : null;
+  const estimate = estimatedRemaining === null ? "estimate pending" : `estimated ~${estimatedRemaining} more iterations`;
+  return `Iteration ${iteration} complete: ${remaining}/${initial} blockable posts remain\n[${bar}] ${(ratio * 100).toFixed(1)}% removed; ${estimate}.`;
 }
