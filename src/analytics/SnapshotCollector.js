@@ -9,8 +9,9 @@ export class SnapshotCollector {
     this.pacer = new RequestPacer(REQUESTS_PER_SECOND);
   }
 
-  async capture(groupId, capturedAt = new Date()) {
-    const completed = this.database.getCompletedSnapshot(groupId);
+  async capture(groupId, capturedAt = new Date(), options = {}) {
+    const { forceNew = false, runType = "baseline", parentSnapshotId = null, window = null } = options;
+    const completed = !forceNew && this.database.getCompletedSnapshot(groupId, runType);
     if (completed) {
       return {
         snapshotId: completed.id,
@@ -24,9 +25,15 @@ export class SnapshotCollector {
       };
     }
 
-    const requestedWindow = threeMonthWindow(capturedAt);
-    const resumable = this.database.getResumableSnapshot(groupId);
-    const snapshotId = resumable?.id ?? this.database.createSnapshot(groupId, requestedWindow.windowStart, requestedWindow.windowEnd);
+    const requestedWindow = window ?? threeMonthWindow(capturedAt);
+    validateWindow(requestedWindow);
+    const resumable = this.database.getResumableSnapshot(groupId, runType, parentSnapshotId);
+    const snapshotId = resumable?.id ?? this.database.createSnapshot(
+      groupId,
+      requestedWindow.windowStart,
+      requestedWindow.windowEnd,
+      { runType, parentSnapshotId },
+    );
     const windowStart = resumable?.window_start ?? requestedWindow.windowStart;
     const windowEnd = resumable?.window_end ?? requestedWindow.windowEnd;
     const state = {
@@ -151,6 +158,12 @@ export function threeMonthWindow(capturedAt) {
     windowEnd.getUTCMilliseconds(),
   ));
   return { windowStart: windowStart.toISOString(), windowEnd: windowEnd.toISOString() };
+}
+
+function validateWindow(window) {
+  if (!window || !Number.isFinite(Date.parse(window.windowStart)) || !Number.isFinite(Date.parse(window.windowEnd))) {
+    throw new Error("Capture window must contain valid windowStart and windowEnd timestamps.");
+  }
 }
 
 function isInWindow(value, start, end) {

@@ -43,40 +43,92 @@ export class AnalyticsDatabase {
       .run(group.id, typeof group.name === "string" ? group.name : null, JSON.stringify(group), now());
   }
 
-  createSnapshot(groupId, windowStart, windowEnd) {
+  createSnapshot(groupId, windowStart, windowEnd, { runType = "baseline", parentSnapshotId = null } = {}) {
     const id = crypto.randomUUID();
     const timestamp = now();
     this.db
       .prepare(
-        `INSERT INTO snapshot_runs (id, group_id, window_start, window_end, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'collecting', ?, ?)`,
+        `INSERT INTO snapshot_runs (id, group_id, window_start, window_end, run_type, parent_snapshot_id, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'collecting', ?, ?)`,
       )
-      .run(id, groupId, windowStart, windowEnd, timestamp, timestamp);
+      .run(id, groupId, windowStart, windowEnd, runType, parentSnapshotId, timestamp, timestamp);
     return id;
   }
 
-  getResumableSnapshot(groupId) {
+  getResumableSnapshot(groupId, runType = "baseline", parentSnapshotId = null) {
     return this.db
       .prepare(
         `SELECT id, window_start, window_end, cursor, pages_fetched, posts_seen, posts_stored
          FROM snapshot_runs
-         WHERE group_id = ? AND status IN ('collecting', 'failed')
+         WHERE group_id = ? AND run_type = ? AND parent_snapshot_id IS ? AND status IN ('collecting', 'failed')
          ORDER BY created_at DESC
          LIMIT 1`,
       )
-      .get(groupId) ?? null;
+      .get(groupId, runType, parentSnapshotId) ?? null;
   }
 
-  getCompletedSnapshot(groupId) {
+  getCompletedSnapshot(groupId, runType = "baseline") {
     return this.db
       .prepare(
         `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, completed_at
          FROM snapshot_runs
-         WHERE group_id = ? AND status = 'complete'
+         WHERE group_id = ? AND run_type = ? AND status = 'complete'
          ORDER BY completed_at DESC
          LIMIT 1`,
       )
-      .get(groupId) ?? null;
+      .get(groupId, runType) ?? null;
+  }
+
+  getCompletedDerivedSnapshot(groupId, parentSnapshotId) {
+    return this.db
+      .prepare(
+        `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, completed_at
+         FROM snapshot_runs
+         WHERE group_id = ? AND run_type = 'blocked_author' AND parent_snapshot_id = ? AND status = 'complete'
+         ORDER BY completed_at DESC
+         LIMIT 1`,
+      )
+      .get(groupId, parentSnapshotId) ?? null;
+  }
+
+  getMostRecentPost(snapshotId) {
+    return this.db
+      .prepare(
+        `SELECT posts.id, posts.group_id, posts.created_at
+         FROM snapshot_posts
+         JOIN posts ON posts.id = snapshot_posts.post_id
+         WHERE snapshot_posts.snapshot_id = ?
+         ORDER BY posts.created_at DESC, posts.id DESC
+         LIMIT 1`,
+      )
+      .get(snapshotId) ?? null;
+  }
+
+  compareSnapshots(baselineSnapshotId, derivedSnapshotId) {
+    const counts = this.db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM snapshot_posts WHERE snapshot_id = ?) AS baseline_posts,
+           (SELECT COUNT(*) FROM snapshot_posts WHERE snapshot_id = ?) AS derived_posts,
+           (SELECT COUNT(*)
+              FROM snapshot_posts AS baseline
+              LEFT JOIN snapshot_posts AS derived
+                ON derived.snapshot_id = ? AND derived.post_id = baseline.post_id
+             WHERE baseline.snapshot_id = ? AND derived.post_id IS NULL) AS missing_posts`,
+      )
+      .get(baselineSnapshotId, derivedSnapshotId, derivedSnapshotId, baselineSnapshotId);
+    const missing = this.db
+      .prepare(
+        `SELECT posts.id, posts.created_at
+         FROM snapshot_posts AS baseline
+         JOIN posts ON posts.id = baseline.post_id
+         LEFT JOIN snapshot_posts AS derived
+           ON derived.snapshot_id = ? AND derived.post_id = baseline.post_id
+         WHERE baseline.snapshot_id = ? AND derived.post_id IS NULL
+         ORDER BY posts.created_at DESC, posts.id DESC`,
+      )
+      .all(derivedSnapshotId, baselineSnapshotId);
+    return { ...counts, missing };
   }
 
   saveRawResponse(snapshotId, endpoint, page, payload) {
@@ -130,6 +182,8 @@ export class AnalyticsDatabase {
         group_id TEXT NOT NULL,
         window_start TEXT NOT NULL,
         window_end TEXT NOT NULL,
+        run_type TEXT NOT NULL DEFAULT 'baseline',
+        parent_snapshot_id TEXT,
         status TEXT NOT NULL,
         cursor TEXT,
         pages_fetched INTEGER NOT NULL DEFAULT 0,
@@ -165,6 +219,14 @@ export class AnalyticsDatabase {
         PRIMARY KEY (snapshot_id, post_id)
       );
     `);
+    this.#ensureColumn("snapshot_runs", "run_type", "TEXT NOT NULL DEFAULT 'baseline'");
+    this.#ensureColumn("snapshot_runs", "parent_snapshot_id", "TEXT");
+  }
+
+  #ensureColumn(table, column, definition) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+    if (columns.some((entry) => entry.name === column)) return;
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 
