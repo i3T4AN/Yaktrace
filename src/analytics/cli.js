@@ -50,7 +50,10 @@ try {
         break;
       }
       console.log(`Blocking next available post source ${nextBlockablePost.id}, then capturing the same locked window again…`);
-      throwIfSourceError(await api.hidePostsFromUser(nextBlockablePost.id), "block the next post's source");
+      await performSourceAction(
+        () => api.hidePostsFromUser(nextBlockablePost.id),
+        "block the next post's source",
+      );
       const next = await collector.capture(selectedGroupId, new Date(), {
         forceNew: true,
         runType: "blocked_author",
@@ -70,7 +73,7 @@ try {
       console.log(`Complete. The locked window is exhausted after ${blocksCompleted} blocks.`);
     }
     console.log("Unblocking all hidden sources…");
-    throwIfSourceError(await api.unhidePostsFromAllUsers(), "unblock all sources");
+    await performSourceAction(() => api.unhidePostsFromAllUsers(), "unblock all sources");
     console.log("All hidden sources have been unblocked.");
     console.log("Saving final personal-post capture over the same locked window…");
     const personal = await collector.capture(selectedGroupId, new Date(), {
@@ -161,6 +164,35 @@ function throwIfSourceError(payload, action) {
   if (payload.success === false || payload.error || payload.errors || (typeof payload.message === "string" && /forbidden|error|failed/i.test(payload.message))) {
     throw new Error(`Could not ${action}: ${payload.message ?? payload.error ?? "source service rejected the request"}`);
   }
+}
+
+async function performSourceAction(operation, action) {
+  await delay(1_000);
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    try {
+      const payload = await operation();
+      if (!isRateLimited(payload)) {
+        throwIfSourceError(payload, action);
+        return payload;
+      }
+    } catch (error) {
+      if (!isRateLimited(error)) throw error;
+    }
+
+    if (attempt === 6) throw new Error(`Could not ${action}: source rate limit did not clear.`);
+    const waitMs = 5_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
+    console.warn(`Rate limited while trying to ${action}. Retrying in ${Math.ceil(waitMs / 1_000)} seconds…`);
+    await delay(waitMs);
+  }
+}
+
+function isRateLimited(value) {
+  const message = value instanceof Error ? value.message : JSON.stringify(value);
+  return /\b429\b|rate.?limit|too many requests/i.test(message);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function iterationProgress(iteration, initial, remaining) {
