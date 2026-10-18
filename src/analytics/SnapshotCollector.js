@@ -88,7 +88,7 @@ export class SnapshotCollector {
   }
 }
 
-const COMMENT_DELAY_MS = Number.parseInt(process.env.YIKSTEIN_COMMENT_DELAY_MS ?? "700", 10);
+const COMMENT_DELAY_MS = Number.parseInt(process.env.YIKSTEIN_COMMENT_DELAY_MS ?? "200", 10);
 const MAX_RATE_LIMIT_RETRIES = 6;
 
 async function withRateLimitRetry(operation, description) {
