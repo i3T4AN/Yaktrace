@@ -55,6 +55,18 @@ export class AnalyticsDatabase {
     return id;
   }
 
+  getResumableSnapshot(groupId) {
+    return this.db
+      .prepare(
+        `SELECT id, window_start, window_end, cursor, pages_fetched, posts_seen, posts_stored, comments_stored
+         FROM snapshot_runs
+         WHERE group_id = ? AND status IN ('collecting', 'failed')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+      )
+      .get(groupId) ?? null;
+  }
+
   saveRawResponse(snapshotId, endpoint, page, payload) {
     this.db
       .prepare(

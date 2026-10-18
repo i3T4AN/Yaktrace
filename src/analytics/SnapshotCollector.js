@@ -9,23 +9,32 @@ export class SnapshotCollector {
   }
 
   async capture(groupId, capturedAt = new Date()) {
-    const { windowStart, windowEnd } = threeMonthWindow(capturedAt);
-    const snapshotId = this.database.createSnapshot(groupId, windowStart, windowEnd);
+    const requestedWindow = threeMonthWindow(capturedAt);
+    const resumable = this.database.getResumableSnapshot(groupId);
+    const snapshotId = resumable?.id ?? this.database.createSnapshot(groupId, requestedWindow.windowStart, requestedWindow.windowEnd);
+    const windowStart = resumable?.window_start ?? requestedWindow.windowStart;
+    const windowEnd = resumable?.window_end ?? requestedWindow.windowEnd;
     const state = {
-      cursor: null,
-      pagesFetched: 0,
-      postsSeen: 0,
-      postsStored: 0,
-      commentsStored: 0,
+      cursor: resumable?.cursor ?? null,
+      pagesFetched: resumable?.pages_fetched ?? 0,
+      postsSeen: resumable?.posts_seen ?? 0,
+      postsStored: resumable?.posts_stored ?? 0,
+      commentsStored: resumable?.comments_stored ?? 0,
       status: "collecting",
     };
 
     try {
-      const group = await this.api.getGroupMetadata(groupId);
+      const group = await withRateLimitRetry(
+        () => this.api.getGroupMetadata(groupId),
+        "fetch school metadata",
+      );
       if (group?.id) this.database.saveGroup(group);
 
       do {
-        const page = await this.api.getGroupPosts(groupId, "recent", state.cursor || undefined);
+        const page = await withRateLimitRetry(
+          () => this.api.getGroupPosts(groupId, "recent", state.cursor || undefined),
+          "fetch posts",
+        );
         throwIfSourceError(page, "fetch posts");
         const posts = Array.isArray(page.posts) ? page.posts : [];
         state.pagesFetched += 1;
@@ -39,7 +48,11 @@ export class SnapshotCollector {
 
           this.database.savePost(snapshotId, post);
           state.postsStored += 1;
-          const comments = await this.#getComments(post.id);
+          await delay(COMMENT_DELAY_MS);
+          const comments = await withRateLimitRetry(
+            () => this.#getComments(post.id),
+            "fetch comments",
+          );
           this.database.saveRawResponse(snapshotId, `/v1/posts/comments/?post_id=${encodeURIComponent(post.id)}`, state.pagesFetched, comments);
           for (const comment of comments.posts ?? []) {
             if (!isInWindow(comment.created_at, windowStart, windowEnd)) continue;
@@ -73,6 +86,32 @@ export class SnapshotCollector {
     if (!response.ok) throw new Error(payload?.message || `Failed to fetch comments (${response.status}).`);
     return payload;
   }
+}
+
+const COMMENT_DELAY_MS = Number.parseInt(process.env.YIKSTEIN_COMMENT_DELAY_MS ?? "700", 10);
+const MAX_RATE_LIMIT_RETRIES = 6;
+
+async function withRateLimitRetry(operation, description) {
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isRateLimit(error) || attempt === MAX_RATE_LIMIT_RETRIES) throw error;
+      const delayMs = 5_000 * 2 ** attempt + Math.floor(Math.random() * 1_000);
+      console.warn(`Rate limited while trying to ${description}. Retrying in ${Math.ceil(delayMs / 1_000)} seconds…`);
+      await delay(delayMs);
+    }
+  }
+  throw new Error(`Unable to ${description}.`);
+}
+
+function isRateLimit(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b429\b|rate.?limit|too many requests/i.test(message);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, Number.isFinite(milliseconds) ? milliseconds : 700));
 }
 
 export function threeMonthWindow(capturedAt) {

@@ -39,3 +39,5 @@ The command prompts for the account's SMS login only when no saved local session
 - snapshot timestamps, cursors, and collection counts.
 
 The command defaults to the authenticated account's primary school membership. You may override that with `--group GROUP_ID`; use `npm run analytics -- groups` to print the memberships returned by the source API. The database is local at `data/yikstein.sqlite`, excluded from Git, and its file permissions are set to owner-only. Use `npm run analytics -- login` to authenticate without starting a collection, or append `--relogin` to force a new SMS login.
+
+Comment retrieval is paced at roughly one request per 700 ms. If the service returns a rate-limit response, the collector retries with exponential backoff and keeps the same snapshot window and cursor. Re-running `capture` after an interruption resumes the latest incomplete capture for that school rather than starting a new window.

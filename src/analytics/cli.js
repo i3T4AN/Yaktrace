@@ -35,7 +35,7 @@ try {
     const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
     if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
-    console.log(`Authenticating complete. Capturing school ${selectedGroupId}. Locking the UTC three-month window and collecting…`);
+    console.log(`Authenticating complete. Capturing school ${selectedGroupId}. Locking or resuming the UTC three-month window and collecting…`);
     const result = await collector.capture(selectedGroupId);
     console.log(`Completed snapshot ${result.snapshotId}`);
     console.log(`Window: ${result.windowStart} → ${result.windowEnd}`);
