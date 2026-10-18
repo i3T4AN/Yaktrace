@@ -36,10 +36,8 @@ export function generatePdfReport(database, groupId) {
 
 function formatPost(post) {
   return [
-    `id: ${post.id}`,
-    `created: ${post.created_at}; alias: ${post.alias ?? ""}; votes: ${post.vote_total ?? ""}; comments: ${post.comment_count ?? ""}`,
-    `text: ${post.text || ""}`,
-    `metadata: ${post.metadata_json}`,
+    `POST ID: ${post.id}`,
+    `POST: ${post.text || ""}`,
   ];
 }
 
