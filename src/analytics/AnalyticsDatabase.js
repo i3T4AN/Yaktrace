@@ -58,7 +58,7 @@ export class AnalyticsDatabase {
   getResumableSnapshot(groupId) {
     return this.db
       .prepare(
-        `SELECT id, window_start, window_end, cursor, pages_fetched, posts_seen, posts_stored, comments_stored
+        `SELECT id, window_start, window_end, cursor, pages_fetched, posts_seen, posts_stored
          FROM snapshot_runs
          WHERE group_id = ? AND status IN ('collecting', 'failed')
          ORDER BY created_at DESC
@@ -70,7 +70,7 @@ export class AnalyticsDatabase {
   getCompletedSnapshot(groupId) {
     return this.db
       .prepare(
-        `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, comments_stored, completed_at
+        `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, completed_at
          FROM snapshot_runs
          WHERE group_id = ? AND status = 'complete'
          ORDER BY completed_at DESC
@@ -102,28 +102,14 @@ export class AnalyticsDatabase {
       .run(snapshotId, post.id);
   }
 
-  saveComment(snapshotId, comment) {
-    const timestamp = now();
-    this.db
-      .prepare(
-        `INSERT INTO comments (id, parent_post_id, group_id, created_at, text, alias, vote_total, reply_post_id, metadata_json, collected_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET vote_total = excluded.vote_total, metadata_json = excluded.metadata_json, collected_at = excluded.collected_at`,
-      )
-      .run(comment.id, comment.parent_post_id ?? "", comment.group_id, comment.created_at, stringOrEmpty(comment.text), stringOrNull(comment.alias), numberOrNull(comment.vote_total), stringOrNull(comment.reply_post_id), JSON.stringify(comment), timestamp);
-    this.db
-      .prepare("INSERT OR IGNORE INTO snapshot_comments (snapshot_id, comment_id) VALUES (?, ?)")
-      .run(snapshotId, comment.id);
-  }
-
   updateSnapshot(snapshotId, details) {
     this.db
       .prepare(
         `UPDATE snapshot_runs
-         SET cursor = ?, pages_fetched = ?, posts_seen = ?, posts_stored = ?, comments_stored = ?, status = ?, last_error = ?, completed_at = ?, updated_at = ?
+         SET cursor = ?, pages_fetched = ?, posts_seen = ?, posts_stored = ?, status = ?, last_error = ?, completed_at = ?, updated_at = ?
          WHERE id = ?`,
       )
-      .run(details.cursor, details.pagesFetched, details.postsSeen, details.postsStored, details.commentsStored, details.status, details.lastError ?? null, details.completedAt ?? null, now(), snapshotId);
+      .run(details.cursor, details.pagesFetched, details.postsSeen, details.postsStored, details.status, details.lastError ?? null, details.completedAt ?? null, now(), snapshotId);
   }
 
   #migrate() {
@@ -149,7 +135,6 @@ export class AnalyticsDatabase {
         pages_fetched INTEGER NOT NULL DEFAULT 0,
         posts_seen INTEGER NOT NULL DEFAULT 0,
         posts_stored INTEGER NOT NULL DEFAULT 0,
-        comments_stored INTEGER NOT NULL DEFAULT 0,
         last_error TEXT,
         completed_at TEXT,
         created_at TEXT NOT NULL,
@@ -178,23 +163,6 @@ export class AnalyticsDatabase {
         snapshot_id TEXT NOT NULL REFERENCES snapshot_runs(id),
         post_id TEXT NOT NULL REFERENCES posts(id),
         PRIMARY KEY (snapshot_id, post_id)
-      );
-      CREATE TABLE IF NOT EXISTS comments (
-        id TEXT PRIMARY KEY,
-        parent_post_id TEXT NOT NULL,
-        group_id TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        text TEXT NOT NULL,
-        alias TEXT,
-        vote_total INTEGER,
-        reply_post_id TEXT,
-        metadata_json TEXT NOT NULL,
-        collected_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS snapshot_comments (
-        snapshot_id TEXT NOT NULL REFERENCES snapshot_runs(id),
-        comment_id TEXT NOT NULL REFERENCES comments(id),
-        PRIMARY KEY (snapshot_id, comment_id)
       );
     `);
   }

@@ -32,12 +32,12 @@ npm install
 npm run analytics -- capture
 ```
 
-The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it locks a UTC window from that moment back three calendar months, collects in-window posts and comments, and persists:
+The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it locks a UTC window from that moment back three calendar months, collects in-window posts, and persists:
 
-- normalized posts and comments with their metadata;
-- immutable raw API response JSON; and
+- normalized posts with their metadata;
+- immutable raw post-page API response JSON; and
 - snapshot timestamps, cursors, and collection counts.
 
 The command defaults to the authenticated account's primary school membership. You may override that with `--group GROUP_ID`; use `npm run analytics -- groups` to print the memberships returned by the source API. The database is local at `data/yikstein.sqlite`, excluded from Git, and its file permissions are set to owner-only. Use `npm run analytics -- login` to authenticate without starting a collection, or append `--relogin` to force a new SMS login.
 
-Comment retrieval uses up to four concurrent requests under one global limit of eight requests per second. If the service returns a rate-limit response, all workers share an exponential cooldown and the collector keeps the same snapshot window and cursor. Re-running `capture` after an interruption resumes the latest incomplete capture; after a snapshot completes, later runs reuse it without crawling the source again. You may tune the global limit with `YIKSTEIN_REQUESTS_PER_SECOND`, but increasing it can cause more throttling.
+Post-page retrieval uses one global limit of ten requests per second. If the service returns a rate-limit response, the collector uses exponential cooldown and keeps the same snapshot window and cursor. Re-running `capture` after an interruption resumes the latest incomplete capture; after a snapshot completes, later runs reuse it without crawling the source again. You may tune the global limit with `YIKSTEIN_REQUESTS_PER_SECOND`, but increasing it can cause more throttling.

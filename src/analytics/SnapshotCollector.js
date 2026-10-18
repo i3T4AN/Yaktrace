@@ -19,7 +19,6 @@ export class SnapshotCollector {
         pagesFetched: completed.pages_fetched,
         postsSeen: completed.posts_seen,
         postsStored: completed.posts_stored,
-        commentsStored: completed.comments_stored,
         completedAt: completed.completed_at,
         alreadyComplete: true,
       };
@@ -35,7 +34,6 @@ export class SnapshotCollector {
       pagesFetched: resumable?.pages_fetched ?? 0,
       postsSeen: resumable?.posts_seen ?? 0,
       postsStored: resumable?.posts_stored ?? 0,
-      commentsStored: resumable?.comments_stored ?? 0,
       status: "collecting",
     };
 
@@ -60,35 +58,12 @@ export class SnapshotCollector {
         this.database.saveRawResponse(snapshotId, "/v1/posts", state.pagesFetched, page);
 
         let reachedWindowStart = false;
-        const inWindowPosts = [];
         for (const post of posts) {
           if (isBefore(post.created_at, windowStart)) reachedWindowStart = true;
           if (!isInWindow(post.created_at, windowStart, windowEnd)) continue;
 
           this.database.savePost(snapshotId, post);
           state.postsStored += 1;
-          inWindowPosts.push(post);
-        }
-
-        const commentPages = await mapWithConcurrency(
-          inWindowPosts,
-          COMMENT_CONCURRENCY,
-          async (post) => ({
-            post,
-            comments: await withRateLimitRetry(
-              () => this.#getComments(post.id),
-              "fetch comments",
-              this.pacer,
-            ),
-          }),
-        );
-        for (const { post, comments } of commentPages) {
-          this.database.saveRawResponse(snapshotId, `/v1/posts/comments/?post_id=${encodeURIComponent(post.id)}`, state.pagesFetched, comments);
-          for (const comment of comments.posts ?? []) {
-            if (!isInWindow(comment.created_at, windowStart, windowEnd)) continue;
-            this.database.saveComment(snapshotId, comment);
-            state.commentsStored += 1;
-          }
         }
 
         state.cursor = typeof page.cursor === "string" && page.cursor ? page.cursor : null;
@@ -108,18 +83,9 @@ export class SnapshotCollector {
     }
   }
 
-  async #getComments(postId) {
-    const response = await this.api.sendRequest(
-      `/v1/posts/comments/?post_id=${encodeURIComponent(postId)}&cacheBust=${Date.now()}`,
-    );
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.message || `Failed to fetch comments (${response.status}).`);
-    return payload;
-  }
 }
 
-const REQUESTS_PER_SECOND = positiveNumber(process.env.YIKSTEIN_REQUESTS_PER_SECOND, 8);
-const COMMENT_CONCURRENCY = Math.floor(positiveNumber(process.env.YIKSTEIN_COMMENT_CONCURRENCY, 4));
+const REQUESTS_PER_SECOND = positiveNumber(process.env.YIKSTEIN_REQUESTS_PER_SECOND, 10);
 const MAX_RATE_LIMIT_RETRIES = 6;
 
 async function withRateLimitRetry(operation, description, pacer) {
@@ -153,20 +119,6 @@ class RequestPacer {
   coolDown(milliseconds) {
     this.nextStart = Math.max(this.nextStart, Date.now() + milliseconds);
   }
-}
-
-async function mapWithConcurrency(items, concurrency, mapper) {
-  const results = new Array(items.length);
-  let nextIndex = 0;
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
-  return results;
 }
 
 function isRateLimit(error) {

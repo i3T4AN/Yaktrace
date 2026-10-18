@@ -39,7 +39,7 @@ try {
     const result = await collector.capture(selectedGroupId);
     console.log(`${result.alreadyComplete ? "Reused completed" : "Completed"} snapshot ${result.snapshotId}`);
     console.log(`Window: ${result.windowStart} → ${result.windowEnd}`);
-    console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}; comments: ${result.commentsStored}`);
+    console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}`);
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
