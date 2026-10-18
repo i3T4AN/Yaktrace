@@ -139,9 +139,8 @@ export class AnalyticsDatabase {
       this.db.prepare("DELETE FROM snapshot_runs WHERE group_id = ?").run(groupId);
       this.db.prepare(
         `DELETE FROM posts
-         WHERE group_id = ?
-           AND NOT EXISTS (SELECT 1 FROM snapshot_posts WHERE snapshot_posts.post_id = posts.id)`,
-      ).run(groupId);
+         WHERE NOT EXISTS (SELECT 1 FROM snapshot_posts WHERE snapshot_posts.post_id = posts.id)`,
+      ).run();
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");
@@ -208,7 +207,15 @@ export class AnalyticsDatabase {
 
   #getPostGroupName(groupId) {
     const row = this.db
-      .prepare("SELECT metadata_json FROM posts WHERE group_id = ? ORDER BY created_at DESC LIMIT 1")
+      .prepare(
+        `SELECT posts.metadata_json
+         FROM snapshot_posts
+         JOIN snapshot_runs ON snapshot_runs.id = snapshot_posts.snapshot_id
+         JOIN posts ON posts.id = snapshot_posts.post_id
+         WHERE snapshot_runs.group_id = ?
+         ORDER BY posts.created_at DESC
+         LIMIT 1`,
+      )
       .get(groupId);
     try {
       const name = JSON.parse(row?.metadata_json ?? "null")?.group?.name;
