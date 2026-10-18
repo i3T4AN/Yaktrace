@@ -79,18 +79,6 @@ export class AnalyticsDatabase {
       .get(groupId, runType) ?? null;
   }
 
-  getCompletedDerivedSnapshot(groupId, parentSnapshotId) {
-    return this.db
-      .prepare(
-        `SELECT id, window_start, window_end, pages_fetched, posts_seen, posts_stored, completed_at
-         FROM snapshot_runs
-         WHERE group_id = ? AND run_type = 'blocked_author' AND parent_snapshot_id = ? AND status = 'complete'
-         ORDER BY completed_at DESC
-         LIMIT 1`,
-      )
-      .get(groupId, parentSnapshotId) ?? null;
-  }
-
   getMostRecentPost(snapshotId) {
     return this.db
       .prepare(
@@ -104,31 +92,28 @@ export class AnalyticsDatabase {
       .get(snapshotId) ?? null;
   }
 
-  compareSnapshots(baselineSnapshotId, derivedSnapshotId) {
-    const counts = this.db
-      .prepare(
-        `SELECT
-           (SELECT COUNT(*) FROM snapshot_posts WHERE snapshot_id = ?) AS baseline_posts,
-           (SELECT COUNT(*) FROM snapshot_posts WHERE snapshot_id = ?) AS derived_posts,
-           (SELECT COUNT(*)
-              FROM snapshot_posts AS baseline
-              LEFT JOIN snapshot_posts AS derived
-                ON derived.snapshot_id = ? AND derived.post_id = baseline.post_id
-             WHERE baseline.snapshot_id = ? AND derived.post_id IS NULL) AS missing_posts`,
-      )
-      .get(baselineSnapshotId, derivedSnapshotId, derivedSnapshotId, baselineSnapshotId);
-    const missing = this.db
-      .prepare(
-        `SELECT posts.id, posts.created_at
-         FROM snapshot_posts AS baseline
-         JOIN posts ON posts.id = baseline.post_id
-         LEFT JOIN snapshot_posts AS derived
-           ON derived.snapshot_id = ? AND derived.post_id = baseline.post_id
-         WHERE baseline.snapshot_id = ? AND derived.post_id IS NULL
-         ORDER BY posts.created_at DESC, posts.id DESC`,
-      )
-      .all(derivedSnapshotId, baselineSnapshotId);
-    return { ...counts, missing };
+  clearCaptures(groupId) {
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare(
+        `DELETE FROM raw_api_responses
+         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
+      ).run(groupId);
+      this.db.prepare(
+        `DELETE FROM snapshot_posts
+         WHERE snapshot_id IN (SELECT id FROM snapshot_runs WHERE group_id = ?)`,
+      ).run(groupId);
+      this.db.prepare("DELETE FROM snapshot_runs WHERE group_id = ?").run(groupId);
+      this.db.prepare(
+        `DELETE FROM posts
+         WHERE group_id = ?
+           AND NOT EXISTS (SELECT 1 FROM snapshot_posts WHERE snapshot_posts.post_id = posts.id)`,
+      ).run(groupId);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   saveRawResponse(snapshotId, endpoint, page, payload) {

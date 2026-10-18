@@ -35,58 +35,22 @@ try {
     const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
     if (!selectedGroupId) throw new Error("No school membership is available on this account.");
     const collector = new SnapshotCollector(api, database);
-    console.log(`Authenticating complete. Capturing school ${selectedGroupId}. Locking or resuming the UTC three-month window and collecting…`);
-    const result = await collector.capture(selectedGroupId);
-    console.log(`${result.alreadyComplete ? "Reused completed" : "Completed"} snapshot ${result.snapshotId}`);
-    console.log(`Window: ${result.windowStart} → ${result.windowEnd}`);
-    console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}`);
-  } else if (command === "block-latest-and-rerun") {
-    const token = await authenticate(database, relogin);
-    const api = new SidechatAPIClient(token);
-    const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
-    if (!selectedGroupId) throw new Error("No school membership is available on this account.");
+    database.clearCaptures(selectedGroupId);
+    console.log(`Authenticating complete. First capture for school ${selectedGroupId}; locking the UTC three-month window…`);
+    const baseline = await collector.capture(selectedGroupId, new Date(), { forceNew: true });
+    const latestPost = database.getMostRecentPost(baseline.snapshotId);
+    if (!latestPost) throw new Error("The first capture contains no posts to block.");
 
-    const baseline = database.getCompletedSnapshot(selectedGroupId);
-    if (!baseline) {
-      throw new Error("No completed baseline snapshot exists. Run capture first.");
-    }
-    if (database.getCompletedDerivedSnapshot(selectedGroupId, baseline.id)) {
-      throw new Error("A blocked-author rerun already exists for the current baseline. Run compare to inspect it.");
-    }
-    const latestPost = database.getMostRecentPost(baseline.id);
-    if (!latestPost) throw new Error("The completed baseline contains no posts to block.");
-
-    console.log(`Blocking the source of newest baseline post ${latestPost.id}, then recapturing the same locked window…`);
-    const blockResult = await api.hidePostsFromUser(latestPost.id);
-    throwIfSourceError(blockResult, "block the newest post's source");
-
-    const collector = new SnapshotCollector(api, database);
-    const result = await collector.capture(selectedGroupId, new Date(), {
+    console.log(`First capture complete. Blocking newest post source ${latestPost.id}…`);
+    throwIfSourceError(await api.hidePostsFromUser(latestPost.id), "block the newest post's source");
+    console.log("Block complete. Starting the second capture over the same locked window…");
+    const derived = await collector.capture(selectedGroupId, new Date(), {
       forceNew: true,
       runType: "blocked_author",
-      parentSnapshotId: baseline.id,
-      window: { windowStart: baseline.window_start, windowEnd: baseline.window_end },
+      parentSnapshotId: baseline.snapshotId,
+      window: { windowStart: baseline.windowStart, windowEnd: baseline.windowEnd },
     });
-    console.log(`Completed derived snapshot ${result.snapshotId}`);
-    console.log(`Same window: ${result.windowStart} → ${result.windowEnd}`);
-    console.log(`Pages: ${result.pagesFetched}; posts: ${result.postsStored}`);
-    console.log("Run `npm run analytics -- compare` to see the baseline-versus-derived difference.");
-  } else if (command === "compare") {
-    const token = await authenticate(database, relogin);
-    const api = new SidechatAPIClient(token);
-    const selectedGroupId = groupId ?? (await getMemberships(api))[0].groupId;
-    if (!selectedGroupId) throw new Error("No school membership is available on this account.");
-
-    const baseline = database.getCompletedSnapshot(selectedGroupId);
-    if (!baseline) throw new Error("No completed baseline snapshot exists. Run capture first.");
-    const derived = database.getCompletedDerivedSnapshot(selectedGroupId, baseline.id);
-    if (!derived) throw new Error("No completed blocked-author rerun exists for the current baseline.");
-    const comparison = database.compareSnapshots(baseline.id, derived.id);
-    console.log(`Baseline ${baseline.id}: ${comparison.baseline_posts} posts`);
-    console.log(`Derived  ${derived.id}: ${comparison.derived_posts} posts`);
-    console.log(`Missing from derived: ${comparison.missing_posts} posts`);
-    comparison.missing.slice(0, 20).forEach((post) => console.log(`- ${post.id} (${post.created_at})`));
-    if (comparison.missing.length > 20) console.log(`…and ${comparison.missing.length - 20} more.`);
+    console.log(`Second capture complete. First: ${baseline.postsStored} posts; second: ${derived.postsStored} posts.`);
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -152,16 +116,12 @@ Usage:
   npm run analytics -- login [--database path/to/data.sqlite]
   npm run analytics -- groups [--relogin] [--database path/to/data.sqlite]
   npm run analytics -- capture [--group GROUP_ID] [--relogin] [--database path/to/data.sqlite]
-  npm run analytics -- block-latest-and-rerun [--group GROUP_ID] [--relogin] [--database path/to/data.sqlite]
-  npm run analytics -- compare [--group GROUP_ID] [--relogin] [--database path/to/data.sqlite]
 
 capture authenticates if needed, defaults to the account's primary school membership,
-locks a three-calendar-month UTC window once, then stores in-window posts,
-source metadata, and raw API responses in SQLite.
-
-block-latest-and-rerun keeps that baseline, blocks the source of its newest post,
-and creates a fresh derived snapshot over the baseline's exact locked window.
-compare prints the posts present in the baseline but absent from that derived snapshot.
+clears earlier captures for that school, locks a three-calendar-month UTC window,
+collects the first capture, blocks the newest captured post's source, then collects
+a second capture over the exact same locked window. Both captures and their raw
+responses are stored in SQLite.
 `);
 }
 

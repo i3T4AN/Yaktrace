@@ -32,7 +32,7 @@ npm install
 npm run analytics -- capture
 ```
 
-The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it locks a UTC window from that moment back three calendar months, collects in-window posts, and persists:
+The command prompts for the account's SMS login only when no saved local session exists. Immediately after authentication it clears prior captures for the selected school, locks a UTC window from that moment back three calendar months, collects in-window posts, blocks the source of the newest captured post, and runs a second collection over the same locked window. It persists:
 
 - normalized posts with their metadata;
 - immutable raw post-page API response JSON; and
@@ -40,16 +40,4 @@ The command prompts for the account's SMS login only when no saved local session
 
 The command defaults to the authenticated account's primary school membership. You may override that with `--group GROUP_ID`; use `npm run analytics -- groups` to print the memberships returned by the source API. The database is local at `data/yikstein.sqlite`, excluded from Git, and its file permissions are set to owner-only. Use `npm run analytics -- login` to authenticate without starting a collection, or append `--relogin` to force a new SMS login.
 
-Post-page retrieval uses one global limit of ten requests per second. If the service returns a rate-limit response, the collector uses exponential cooldown and keeps the same snapshot window and cursor. Re-running `capture` after an interruption resumes the latest incomplete capture; after a snapshot completes, later runs reuse it without crawling the source again. You may tune the global limit with `YIKSTEIN_REQUESTS_PER_SECOND`, but increasing it can cause more throttling.
-
-To make a controlled second capture, run:
-
-```bash
-npm run analytics -- block-latest-and-rerun
-```
-
-It selects the newest post from the completed baseline, hides that source through the authenticated account, and collects a separate derived snapshot over the exact same frozen interval. The baseline is retained unchanged, so compare the two locally with:
-
-```bash
-npm run analytics -- compare
-```
+Post-page retrieval uses one global limit of ten requests per second. If the service returns a rate-limit response, the collector uses exponential cooldown and keeps the same snapshot window and cursor. You may tune the global limit with `YIKSTEIN_REQUESTS_PER_SECOND`, but increasing it can cause more throttling.
