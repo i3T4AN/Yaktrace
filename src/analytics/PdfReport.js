@@ -128,8 +128,8 @@ function pageContent(entries) {
 function coverPageContent(cover) {
   const title = printableText(cover.title);
   const releaseLabel = printableText(`${cover.schoolName} FILE RELEASE`);
-  const windowStart = printableText(cover.windowStart);
-  const windowEnd = printableText(cover.windowEnd);
+  const windowStart = printableText(formatUtcTimestamp(cover.windowStart));
+  const windowEnd = printableText(formatUtcTimestamp(cover.windowEnd));
   return [
     "0 g 0 0 612 792 re f",
     "1 g BT /F1 10 Tf 48 716 Td (" + escapePdfText(releaseLabel) + ") Tj ET",
@@ -155,4 +155,20 @@ function escapePdfText(value) {
 
 function safeFileName(value) {
   return printableText(value).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "school";
+}
+
+function formatUtcTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  }).format(date);
 }
