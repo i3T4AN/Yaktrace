@@ -66,6 +66,9 @@ try {
     if (database.countSnapshotPosts(current.id) === 0) {
       console.log(`Complete. The locked window is exhausted after ${blocksCompleted} blocks.`);
     }
+    console.log("Unblocking all hidden sources…");
+    throwIfSourceError(await api.unhidePostsFromAllUsers(), "unblock all sources");
+    console.log("All hidden sources have been unblocked.");
   } else {
     throw new Error(`Unknown command: ${command}`);
   }
@@ -136,7 +139,8 @@ capture authenticates if needed, defaults to the account's primary school member
 locks a three-calendar-month UTC window, saves the first capture, then repeatedly
 blocks the next available non-self post source and saves another capture over that
 exact same window until no blockable posts remain. Every capture and its raw
-responses are stored in SQLite. Each command starts a fresh run.
+responses are stored in SQLite. It then unblocks all hidden sources. Each command
+starts a fresh run.
 `);
 }
 
