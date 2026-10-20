@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 
-export function generatePdfReport(database, groupId, { fileName } = {}) {
+export function generatePdfReport(database, groupId) {
   const model = database.getReportModel(groupId);
   const projectName = basename(dirname(process.cwd()));
   const schoolName = model.groupName || "School";
@@ -25,10 +25,7 @@ export function generatePdfReport(database, groupId, { fileName } = {}) {
 
   const outputDirectory = resolve(process.cwd(), "reports");
   mkdirSync(outputDirectory, { recursive: true, mode: 0o700 });
-  const outputName = typeof fileName === "string" && fileName.length > 0
-    ? `${safeFileName(fileName.replace(/\.pdf$/i, ""))}.pdf`
-    : `${safeFileName(schoolName)}-report.pdf`;
-  const outputPath = resolve(outputDirectory, outputName);
+  const outputPath = resolve(outputDirectory, `${safeFileName(schoolName)}-report.pdf`);
   writeFileSync(outputPath, buildPdf(lines));
   chmodSync(outputPath, 0o600);
   return outputPath;
