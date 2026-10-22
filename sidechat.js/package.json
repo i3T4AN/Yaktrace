@@ -1,0 +1,14 @@
+{
+  "name": "sidechat.js",
+  "version": "2.6.6",
+  "description": "Local YikYak API connector runtime for YakTrace.",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs"
+  },
+  "author": "Micah Lindley",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

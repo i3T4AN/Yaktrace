@@ -1,4 +1,4 @@
-node_modules
-*.local
-data/
-reports/
+.DS_Store
+YakTrace/node_modules/
+YakTrace/.runtime/
+YakTrace/*.local

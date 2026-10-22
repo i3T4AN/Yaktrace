@@ -1,0 +1,16 @@
+{
+  "name": "yaktrace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local fixed-window capture and dossier generator using sidechat.js.",
+  "type": "module",
+  "scripts": {
+    "yaktrace": "node --experimental-sqlite src/cli.js"
+  },
+  "dependencies": {
+    "sidechat.js": "file:../sidechat.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
