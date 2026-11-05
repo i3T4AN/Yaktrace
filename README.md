@@ -1,6 +1,6 @@
 # YakTrace
 
-**YakTrace (Yikstein files)** is a local YikYak research tool for collecting a fixed historical feed window, observing how that window changes after a source-level hide action, and rendering the resulting observations as a PDF dossier. It is built as a complete, self-contained release: the custom workflow, local connector, documentation, examples, and package lockfile all live in this repository.
+**YakTrace (Yikstein files)** is a local YikYak research tool for collecting a fixed historical feed window, observing how that window changes after a source-level hide action, and rendering the resulting observational differences as a PDF dossier that groups every authors posts from the selected timeframe together. which deanonymizes authorship for a given school on a mass scale. It is built as a complete, self-contained release: the custom workflow, local connector, documentation, examples, and package lockfile all live in this repository.
 
 > **PSA — about the name.** “Yikstein files” is the informal YikYak/Epstein nickname for this project. The nickname is a bit disrespectful, and the full Epstein files should be released. The official release is named **YakTrace**, and this repository includes the complete source files for it. YakTrace is not a YikYak product, feature, endorsement, or statement by YikYak or its operators.
 
